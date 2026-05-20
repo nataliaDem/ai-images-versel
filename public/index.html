@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Image Prompt Studio</title>
+        <link rel="stylesheet" href="/styles.css" />
+    </head>
+    <body>
+        <div class="page-shell">
+            <header class="hero">
+                <p class="eyebrow">FOODSPACE</p>
+                <h1>Image editor</h1>
+                <p class="hero-copy">
+                    Upload an image, pick or edit a prompt, choose whether to
+                    preserve the original orientation, and see the result on
+                    the same page.
+                </p>
+            </header>
+
+            <main class="workspace">
+                <section class="panel controls-panel">
+                    <div class="mode-switch" role="tablist" aria-label="Mode">
+                        <button
+                            id="singleModeButton"
+                            class="mode-button is-active"
+                            type="button"
+                            data-mode="single"
+                        >
+                            Single
+                        </button>
+                        <button
+                            id="bulkModeButton"
+                            class="mode-button"
+                            type="button"
+                            data-mode="bulk"
+                        >
+                            Bulk
+                        </button>
+                    </div>
+
+                    <div id="singleControls" class="mode-panel">
+                        <div
+                            id="dropzone"
+                            class="dropzone"
+                            tabindex="0"
+                            role="button"
+                            aria-label="Upload image"
+                        >
+                            <input
+                                id="fileInput"
+                                class="sr-only"
+                                type="file"
+                                accept="image/png,image/jpeg"
+                            />
+                            <div class="dropzone-copy">
+                                <span class="dropzone-title">
+                                    Drag an image here
+                                </span>
+                                <span class="dropzone-subtitle">
+                                    or click to choose a file
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="field-group visually-hidden">
+                            <label for="imageUrlInput">Source image URL</label>
+                            <input
+                                id="imageUrlInput"
+                                type="url"
+                                placeholder="https://example.com/source-image.jpg"
+                            />
+                        </div>
+
+                        <div
+                            id="singleSourceSection"
+                            class="inline-preview-section is-hidden"
+                        >
+                            <div class="preview-heading">Source</div>
+                            <div class="preview-frame preview-frame-compact">
+                                <img
+                                    id="sourcePreview"
+                                    alt="Source image preview"
+                                />
+                                <div
+                                    id="sourcePlaceholder"
+                                    class="placeholder"
+                                >
+                                    Your uploaded image will appear here
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="bulkControls" class="mode-panel is-hidden">
+                        <div class="field-group">
+                            <label for="bakerySelect">Bakery</label>
+                            <select id="bakerySelect">
+                                <option value="">Choose a bakery</option>
+                            </select>
+                        </div>
+
+                        <div class="field-group">
+                            <label for="categorySelect">Category</label>
+                            <select id="categorySelect" disabled>
+                                <option value="">Choose a category</option>
+                            </select>
+                        </div>
+
+                        <div
+                            id="bulkSourceSection"
+                            class="inline-preview-section is-hidden"
+                        >
+                            <div class="preview-heading-row">
+                                <div class="preview-heading">Source</div>
+                                <label class="products-check-all">
+                                    <input id="selectAllProducts" type="checkbox" />
+                                    <span>Select all</span>
+                                </label>
+                            </div>
+                            <div
+                                id="bulkSourcesGrid"
+                                class="bulk-results-grid empty-state"
+                            >
+                                Choose a bakery and category to load products.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="style-grid">
+                        <div class="field-group style-group">
+                            <label for="wallSelect">Wall</label>
+                            <select id="wallSelect"></select>
+                        </div>
+                        <div class="field-group style-group">
+                            <label for="tableSelect">Table</label>
+                            <select id="tableSelect"></select>
+                        </div>
+                        <div class="field-group style-group">
+                            <label for="standSelect">Stand / plate</label>
+                            <select id="standSelect"></select>
+                        </div>
+                    </div>
+
+                    <div class="prompt-section">
+                        <div class="prompt-section-header">
+                            <div class="prompt-title">Prompt</div>
+                            <button
+                                id="togglePromptButton"
+                                class="prompt-toggle-button"
+                                type="button"
+                                aria-expanded="false"
+                                aria-controls="promptEditorWrap"
+                            >
+                                Show prompt
+                            </button>
+                        </div>
+
+                        <div
+                            id="promptEditorWrap"
+                            class="field-group prompt-editor-wrap is-collapsed"
+                        >
+                            <textarea
+                                id="promptEditor"
+                                rows="10"
+                                placeholder="Edit the prompt before generating"
+                            ></textarea>
+                        </div>
+                    </div>
+
+                    <label class="toggle-row" for="preserveOrientation">
+                        <span>Preserve source image orientation</span>
+                        <input
+                            id="preserveOrientation"
+                            type="checkbox"
+                            checked
+                        />
+                    </label>
+
+                    <div class="actions">
+                        <button id="generateButton" class="primary-button">
+                            Generate
+                        </button>
+                    </div>
+
+                    <p id="status" class="status-text">No file selected yet.</p>
+                </section>
+
+                <section class="panel preview-panel">
+                    <div id="singlePreviewSection">
+                        <div class="preview-card">
+                            <div class="preview-heading">Result</div>
+                            <div class="preview-frame">
+                                <img
+                                    id="resultPreview"
+                                    alt="Generated image"
+                                />
+                                <div
+                                    id="resultPlaceholder"
+                                    class="placeholder"
+                                >
+                                    The generated result will appear here
+                                </div>
+                                <div
+                                    id="resultLoader"
+                                    class="preview-loader is-hidden"
+                                >
+                                    <div class="loader-spinner" aria-hidden="true"></div>
+                                    <div class="loader-text">Generation in progress</div>
+                                </div>
+                            </div>
+                            <div class="bulk-download-section">
+                                <button
+                                    id="saveButton"
+                                    class="secondary-button preview-download-button"
+                                    disabled
+                                >
+                                    Download result
+                                </button>
+                                <p class="bulk-download-note">
+                                    Be sure to save the generated image so you do not lose it.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="bulkPreviewSection" class="is-hidden">
+                        <div class="preview-card">
+                            <div class="preview-heading">Result</div>
+                            <div
+                                id="bulkResultLoader"
+                                class="preview-loader bulk-loader is-hidden"
+                            >
+                                <div class="loader-spinner" aria-hidden="true"></div>
+                                <div class="loader-text">Generation in progress</div>
+                            </div>
+                            <div
+                                id="bulkResultsGrid"
+                                class="bulk-results-grid empty-state"
+                            >
+                                Generated product images will appear here.
+                            </div>
+                            <div
+                                id="bulkErrors"
+                                class="bulk-errors is-hidden"
+                            ></div>
+                            <div class="bulk-download-section">
+                                <button
+                                    id="bulkDownloadAllButton"
+                                    class="secondary-button preview-download-button bulk-download-all-button"
+                                    type="button"
+                                    disabled
+                                >
+                                    Download all
+                                </button>
+                                <p class="bulk-download-note">
+                                    Be sure to save the generated images so you do not lose them.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+
+        <div id="lightbox" class="lightbox is-hidden" aria-hidden="true">
+            <button
+                id="lightboxClose"
+                class="lightbox-close"
+                type="button"
+                aria-label="Close image preview"
+            >
+                Close
+            </button>
+            <img id="lightboxImage" alt="Large generated image preview" />
+        </div>
+
+        <script src="/app.js"></script>
+    </body>
+</html>

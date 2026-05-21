@@ -337,6 +337,143 @@ function createHistoryId(prefix) {
     return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function escapeZipFilename(name) {
+    return String(name || "image")
+        .replace(/\.[^.]+$/, "")
+        .replace(/[<>:"/\\|?*\x00-\x1F]+/g, "-")
+        .replace(/\s+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/(^-|-$)/g, "")
+        .slice(0, 80);
+}
+
+function parseDataUrl(dataUrl) {
+    const match = String(dataUrl || "").match(/^data:([^;,]+)?;base64,(.+)$/);
+
+    if (!match) {
+        throw new Error("Invalid image data.");
+    }
+
+    const binary = window.atob(match[2]);
+    const bytes = new Uint8Array(binary.length);
+
+    for (let index = 0; index < binary.length; index += 1) {
+        bytes[index] = binary.charCodeAt(index);
+    }
+
+    return bytes;
+}
+
+const crcTable = (() => {
+    const table = new Uint32Array(256);
+
+    for (let index = 0; index < 256; index += 1) {
+        let crc = index;
+
+        for (let bit = 0; bit < 8; bit += 1) {
+            crc = crc & 1 ? 0xedb88320 ^ (crc >>> 1) : crc >>> 1;
+        }
+
+        table[index] = crc >>> 0;
+    }
+
+    return table;
+})();
+
+function crc32(bytes) {
+    let crc = 0xffffffff;
+
+    bytes.forEach((byte) => {
+        crc = crcTable[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+    });
+
+    return (crc ^ 0xffffffff) >>> 0;
+}
+
+function dateToDos(date = new Date()) {
+    const year = Math.max(1980, date.getFullYear());
+    const dosTime =
+        (date.getHours() << 11) |
+        (date.getMinutes() << 5) |
+        Math.floor(date.getSeconds() / 2);
+    const dosDate =
+        ((year - 1980) << 9) |
+        ((date.getMonth() + 1) << 5) |
+        date.getDate();
+
+    return { dosTime, dosDate };
+}
+
+function createZipBlob(files) {
+    const encoder = new TextEncoder();
+    const { dosTime, dosDate } = dateToDos(new Date());
+    const localParts = [];
+    const centralParts = [];
+    let offset = 0;
+
+    files.forEach((file) => {
+        const filenameBytes = encoder.encode(file.name);
+        const dataBytes = file.data;
+        const crc = crc32(dataBytes);
+
+        const localHeader = new Uint8Array(30);
+        const localView = new DataView(localHeader.buffer);
+        localView.setUint32(0, 0x04034b50, true);
+        localView.setUint16(4, 20, true);
+        localView.setUint16(6, 0, true);
+        localView.setUint16(8, 0, true);
+        localView.setUint16(10, dosTime, true);
+        localView.setUint16(12, dosDate, true);
+        localView.setUint32(14, crc, true);
+        localView.setUint32(18, dataBytes.length, true);
+        localView.setUint32(22, dataBytes.length, true);
+        localView.setUint16(26, filenameBytes.length, true);
+        localView.setUint16(28, 0, true);
+        localParts.push(localHeader, filenameBytes, dataBytes);
+
+        const centralHeader = new Uint8Array(46);
+        const centralView = new DataView(centralHeader.buffer);
+        centralView.setUint32(0, 0x02014b50, true);
+        centralView.setUint16(4, 20, true);
+        centralView.setUint16(6, 20, true);
+        centralView.setUint16(8, 0, true);
+        centralView.setUint16(10, 0, true);
+        centralView.setUint16(12, dosTime, true);
+        centralView.setUint16(14, dosDate, true);
+        centralView.setUint32(16, crc, true);
+        centralView.setUint32(20, dataBytes.length, true);
+        centralView.setUint32(24, dataBytes.length, true);
+        centralView.setUint16(28, filenameBytes.length, true);
+        centralView.setUint16(30, 0, true);
+        centralView.setUint16(32, 0, true);
+        centralView.setUint16(34, 0, true);
+        centralView.setUint16(36, 0, true);
+        centralView.setUint32(38, 0, true);
+        centralView.setUint32(42, offset, true);
+        centralParts.push(centralHeader, filenameBytes);
+
+        offset += localHeader.length + filenameBytes.length + dataBytes.length;
+    });
+
+    const centralDirectory = new Blob(centralParts);
+    const centralDirectorySize = centralDirectory.size;
+
+    const endRecord = new Uint8Array(22);
+    const endView = new DataView(endRecord.buffer);
+    endView.setUint32(0, 0x06054b50, true);
+    endView.setUint16(4, 0, true);
+    endView.setUint16(6, 0, true);
+    endView.setUint16(8, files.length, true);
+    endView.setUint16(10, files.length, true);
+    endView.setUint32(12, centralDirectorySize, true);
+    endView.setUint32(16, offset, true);
+    endView.setUint16(20, 0, true);
+
+    return new Blob([...localParts, centralDirectory, endRecord], {
+        type: "application/zip",
+    });
+}
+
 function openHistoryDb() {
     return new Promise((resolve, reject) => {
         const request = window.indexedDB.open(DB_CONFIG.name, DB_CONFIG.version);
@@ -1255,30 +1392,6 @@ elements.bulkDownloadAllButton.addEventListener("click", async () => {
     elements.bulkDownloadAllButton.disabled = true;
 
     try {
-        const response = await fetch("/api/download-bulk-archive", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                bakeryName: getSelectedText(elements.bakerySelect),
-                categoryName: getSelectedText(elements.categorySelect),
-                items: successes.map((item) => ({
-                    name: item.name,
-                    imageDataUrl: item.imageDataUrl,
-                })),
-            }),
-        });
-
-        if (!response.ok) {
-            const payload = await response.json();
-            throw new Error(payload.error || "Could not create the archive.");
-        }
-
-        const blob = await response.blob();
-        const blobUrl = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = blobUrl;
         const generationDate = new Date().toISOString().slice(0, 10);
         const bakeryName = getSelectedText(elements.bakerySelect) || "bakery";
         const categoryName = getSelectedText(elements.categorySelect) || "category";
@@ -1287,6 +1400,27 @@ elements.bulkDownloadAllButton.addEventListener("click", async () => {
             .replace(/\s+/g, "-")
             .replace(/-+/g, "-")
             .replace(/(^-|-$)/g, "");
+        const folderName = escapeZipFilename(archiveName || "generated-results");
+        const seenNames = new Map();
+        const zipBlob = createZipBlob(
+            successes.map((item, index) => {
+                const baseName =
+                    escapeZipFilename(item.name || `image-${index + 1}`) || `image-${index + 1}`;
+                const occurrence = (seenNames.get(baseName) || 0) + 1;
+                seenNames.set(baseName, occurrence);
+                const uniqueBaseName =
+                    occurrence === 1 ? baseName : `${baseName}-${occurrence}`;
+
+                return {
+                    name: `${folderName}/${uniqueBaseName}.png`,
+                    data: parseDataUrl(item.imageDataUrl),
+                };
+            }),
+        );
+
+        const blobUrl = URL.createObjectURL(zipBlob);
+        const link = document.createElement("a");
+        link.href = blobUrl;
         link.download = `${archiveName || "generated-results"}.zip`;
         document.body.appendChild(link);
         link.click();

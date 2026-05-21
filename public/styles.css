@@ -417,8 +417,8 @@ textarea {
 .toggle-row input[type="checkbox"] {
     appearance: none;
     -webkit-appearance: none;
-    width: 16px;
-    height: 16px;
+    width: 20px;
+    height: 20px;
     margin: 0;
     border: 1px solid rgba(34, 22, 31, 0.18);
     border-radius: 4px;
@@ -432,8 +432,8 @@ textarea {
 .product-checkbox::after,
 .toggle-row input[type="checkbox"]::after {
     content: "";
-    width: 11px;
-    height: 11px;
+    width: 13px;
+    height: 13px;
     opacity: 0;
     transform: scale(0.7);
     transition:
@@ -461,8 +461,9 @@ textarea {
 
 .product-checkbox {
     position: absolute;
-    top: 8px;
-    left: 8px;
+    top: 4px;
+    left: 4px;
+    box-shadow: 0 2px 6px rgba(34, 22, 31, 0.12);
 }
 
 .toggle-row input[type="checkbox"] {
@@ -667,11 +668,13 @@ button:disabled {
 .bulk-source-card {
     position: relative;
     display: grid;
-    gap: 3px;
+    grid-template-rows: auto auto;
+    gap: 4px;
     padding: 4px;
     border: 1px solid var(--line-soft);
     border-radius: 10px;
     background: #fff;
+    min-height: 0;
 }
 
 .bulk-result-image-button {
@@ -688,8 +691,9 @@ button:disabled {
 
 .bulk-result-thumb img {
     width: 100%;
-    aspect-ratio: 1 / 1;
-    object-fit: cover;
+    height: auto;
+    max-height: 240px;
+    object-fit: contain;
     border-radius: 8px;
     background: #f7fffd;
 }
@@ -709,23 +713,33 @@ button:disabled {
 
 #bulkSourcesGrid .bulk-result-thumb img {
     border-radius: 6px;
+    aspect-ratio: 1 / 1;
+    max-height: none;
+    object-fit: contain;
+    background: #f7fffd;
 }
 
 #bulkSourcesGrid .bulk-result-name {
-    font-size: 9px;
-    line-height: 1.2;
-    min-height: 1.2em;
+    display: block;
+    font-size: 8px;
+    line-height: 1.15;
+    min-height: 1.15em;
     color: rgba(34, 22, 31, 0.86);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 #bulkResultsGrid .bulk-result-card {
     gap: 8px;
     padding: 10px;
     border-radius: 14px;
+    align-content: start;
 }
 
 #bulkResultsGrid .bulk-result-thumb img {
     border-radius: 10px;
+    max-height: 320px;
 }
 
 #bulkResultsGrid .bulk-result-name {

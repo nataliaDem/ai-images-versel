@@ -110,6 +110,11 @@ const PROMPT_OPTIONS = {
             label: "Light oak panels",
             prompt: "wall: light oak wooden wall panels, clean, modern, and evenly finished",
         },
+        {
+            value: "keep",
+            label: "Keep as is",
+            prompt: "keep the existing wall exactly as it is",
+        },
     ],
     tables: [
         {
@@ -171,6 +176,11 @@ const PROMPT_OPTIONS = {
             value: "white-stone",
             label: "Soft white stone",
             prompt: "table: soft white stone surface, clean and modern, with a subtle natural texture",
+        },
+        {
+            value: "keep",
+            label: "Keep as is",
+            prompt: "keep the existing table or surface exactly as it is",
         },
     ],
     stands: [
@@ -585,6 +595,16 @@ function updateSelectAllProductsLabel() {
         count > 0 ? `Select all (${count})` : "Select all";
 }
 
+function syncProductCheckboxes() {
+    elements.bulkSourcesGrid.querySelectorAll(".product-checkbox").forEach((checkbox) => {
+        const productId = Number(checkbox.dataset.productId);
+        checkbox.checked = state.selectedProductIds.has(productId);
+    });
+
+    elements.selectAllProducts.checked =
+        state.products.length > 0 && state.selectedProductIds.size === state.products.length;
+}
+
 function openLightbox({ sourceSrc = "", resultSrc = "" }) {
     if (!sourceSrc && !resultSrc) {
         return;
@@ -673,6 +693,8 @@ function buildPrompt() {
         "Preserve the product exactly:",
         "- do not change the shape, colors, decorations, proportions, or details of the product",
         "- place the product in the center of the final composition, even if it is off-center in the original image",
+        "- the product must rest naturally on the table, stand, or plate and must never look like it is floating or flying",
+        "- if needed, adjust the perspective or camera angle slightly so the product looks naturally placed and physically grounded",
         "",
         "Realism requirements:",
         "- the result must look like a real professional product photo",
@@ -1314,7 +1336,7 @@ elements.selectAllProducts.addEventListener("change", (event) => {
         state.selectedProductIds.clear();
     }
 
-    renderBulkSources();
+    syncProductCheckboxes();
 });
 
 elements.bulkSourcesGrid.addEventListener("change", (event) => {

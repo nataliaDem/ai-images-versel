@@ -535,6 +535,7 @@ function buildPrompt() {
         "",
         "Preserve the product exactly:",
         "- do not change the shape, colors, decorations, proportions, or details of the product",
+        "- place the product in the center of the final composition, even if it is off-center in the original image",
         "",
         "Realism requirements:",
         "- the result must look like a real professional product photo",

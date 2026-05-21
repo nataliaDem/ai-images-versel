@@ -17,6 +17,7 @@ const elements = {
     categorySelect: document.getElementById("categorySelect"),
     bulkSourceSection: document.getElementById("bulkSourceSection"),
     selectAllProducts: document.getElementById("selectAllProducts"),
+    selectAllProductsLabel: document.getElementById("selectAllProductsLabel"),
     bulkSourcesGrid: document.getElementById("bulkSourcesGrid"),
     sceneSection: document.getElementById("sceneSection"),
     wallField: document.getElementById("wallField"),
@@ -441,6 +442,12 @@ function setPromptVisibility(isVisible) {
     elements.togglePromptButton.setAttribute("aria-expanded", String(isVisible));
 }
 
+function updateSelectAllProductsLabel() {
+    const count = state.products.length;
+    elements.selectAllProductsLabel.textContent =
+        count > 0 ? `Select all (${count})` : "Select all";
+}
+
 function openLightbox({ sourceSrc = "", resultSrc = "" }) {
     if (!sourceSrc && !resultSrc) {
         return;
@@ -797,12 +804,14 @@ async function loadProducts(bakeryId, categoryId) {
         state.selectedProductIds.add(product.id);
     });
     elements.selectAllProducts.checked = state.products.length > 0;
+    updateSelectAllProductsLabel();
     renderBulkSources();
     updateStepVisibility();
 }
 
 function renderBulkSources() {
     if (state.products.length === 0) {
+        updateSelectAllProductsLabel();
         elements.bulkSourcesGrid.className = "bulk-results-grid empty-state";
         elements.bulkSourcesGrid.textContent = "Choose a bakery and category to load products.";
         updateStepVisibility();
@@ -1335,5 +1344,6 @@ setVisible(elements.singleDownloadSection, false);
 setVisible(elements.bulkDownloadSection, false);
 renderBulkSources();
 renderBulkResults([]);
+updateSelectAllProductsLabel();
 setMode("bulk");
 setStatus("");

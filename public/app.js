@@ -11,6 +11,10 @@ const elements = {
     singleResetButton: document.getElementById("singleResetButton"),
     singleSourceSection: document.getElementById("singleSourceSection"),
     bakerySection: document.getElementById("bakerySection"),
+    bakeryCombobox: document.getElementById("bakeryCombobox"),
+    bakerySearchInput: document.getElementById("bakerySearchInput"),
+    bakeryComboboxButton: document.getElementById("bakeryComboboxButton"),
+    bakeryDropdown: document.getElementById("bakeryDropdown"),
     bakerySelect: document.getElementById("bakerySelect"),
     bulkSelectionLoader: document.getElementById("bulkSelectionLoader"),
     categorySection: document.getElementById("categorySection"),
@@ -20,6 +24,10 @@ const elements = {
     selectAllProductsLabel: document.getElementById("selectAllProductsLabel"),
     bulkSourcesGrid: document.getElementById("bulkSourcesGrid"),
     sceneSection: document.getElementById("sceneSection"),
+    scenePresetGrid: document.getElementById("scenePresetGrid"),
+    sceneCustomizePanel: document.getElementById("sceneCustomizePanel"),
+    toggleSceneCustomizeButton: document.getElementById("toggleSceneCustomizeButton"),
+    selectedSceneName: document.getElementById("selectedSceneName"),
     wallField: document.getElementById("wallField"),
     wallSelect: document.getElementById("wallSelect"),
     tableField: document.getElementById("tableField"),
@@ -34,6 +42,7 @@ const elements = {
     preserveOrientation: document.getElementById("preserveOrientation"),
     actionsSection: document.getElementById("actionsSection"),
     generateButton: document.getElementById("generateButton"),
+    costEstimate: document.getElementById("costEstimate"),
     saveButton: document.getElementById("saveButton"),
     singleDownloadSection: document.getElementById("singleDownloadSection"),
     sourcePreview: document.getElementById("sourcePreview"),
@@ -222,6 +231,57 @@ const PROMPT_OPTIONS = {
     ],
 };
 
+const SCENE_PRESETS = [
+    {
+        id: "soft-beige-studio",
+        name: "Soft Beige Studio",
+        wall: "beige",
+        table: "white-planks",
+        stand: "white-pedestal",
+        image: "/scene-presets/soft-beige-studio.jpg",
+    },
+    {
+        id: "clean-white-marble",
+        name: "Clean White Marble",
+        wall: "chalk-white",
+        table: "white-marble",
+        stand: "white-plate",
+        image: "/scene-presets/clean-white-marble.jpg",
+    },
+    {
+        id: "warm-natural-wood",
+        name: "Fresh Mint Wood",
+        wall: "mint",
+        table: "light-wood",
+        stand: "round-wooden-tray",
+        image: "/scene-presets/warm-natural-wood.jpg",
+    },
+    {
+        id: "cool-stone-minimal",
+        name: "Cool Stone Minimal",
+        wall: "cool-gray-stone",
+        table: "white-stone",
+        stand: "silver-board",
+        image: "/scene-presets/cool-stone-minimal.jpg",
+    },
+    {
+        id: "warm-cream-editorial",
+        name: "Warm Cream Editorial",
+        wall: "cream",
+        table: "beige-stone",
+        stand: "gold-board",
+        image: "/scene-presets/warm-cream-editorial.jpg",
+    },
+    {
+        id: "as-is-cleanup",
+        name: "Improve Quality",
+        wall: "keep",
+        table: "keep",
+        stand: "keep",
+        type: "utility",
+    },
+];
+
 const state = {
     mode: "bulk",
     sourceImageDataUrl: "",
@@ -230,6 +290,7 @@ const state = {
     uploadedFileName: "",
     bakeriesLoaded: false,
     bakeries: [],
+    filteredBakeries: [],
     categories: [],
     products: [],
     selectedProductIds: new Set(),
@@ -237,6 +298,9 @@ const state = {
     bulkSelectionLoading: false,
     bakeriesLoading: false,
     bakeriesFailed: false,
+    bakeryDropdownOpen: false,
+    selectedScenePresetId: SCENE_PRESETS[0].id,
+    sceneCustomizeOpen: false,
 };
 
 const STORAGE_KEYS = {
@@ -252,6 +316,11 @@ const DB_CONFIG = {
 };
 
 const STORAGE_LIMIT = 100;
+const IMAGE_PRICING = {
+    square: 0.034,
+    horizontal: 0.05,
+    vertical: 0.05,
+};
 
 function setStatus(message = "", isError = false) {
     elements.status.textContent = message;
@@ -260,6 +329,87 @@ function setStatus(message = "", isError = false) {
 
 function setVisible(element, isVisible) {
     element.classList.toggle("is-hidden", !isVisible);
+}
+
+function formatUsdAmount(amount) {
+    return `$${amount.toFixed(3).replace(/0+$/, "").replace(/\.$/, "")}`;
+}
+
+function getOrientationFromDimensions(width, height) {
+    if (!width || !height) {
+        return "horizontal";
+    }
+
+    if (width === height) {
+        return "square";
+    }
+
+    return width > height ? "horizontal" : "vertical";
+}
+
+function getSingleImageOrientation() {
+    if (!elements.preserveOrientation.checked) {
+        return "horizontal";
+    }
+
+    return getOrientationFromDimensions(
+        elements.sourcePreview.naturalWidth,
+        elements.sourcePreview.naturalHeight,
+    );
+}
+
+function getBulkImageOrientation(productId) {
+    if (!elements.preserveOrientation.checked) {
+        return "horizontal";
+    }
+
+    const image = elements.bulkSourcesGrid.querySelector(
+        `img[data-product-image-id="${productId}"]`,
+    );
+
+    return getOrientationFromDimensions(image?.naturalWidth, image?.naturalHeight);
+}
+
+function getSingleGenerationCost() {
+    if (!hasSingleSource()) {
+        return 0;
+    }
+
+    return IMAGE_PRICING[getSingleImageOrientation()] || IMAGE_PRICING.horizontal;
+}
+
+function getBulkGenerationCost() {
+    const selectedItems = state.products.filter((product) =>
+        state.selectedProductIds.has(product.id),
+    );
+
+    return selectedItems.reduce((sum, product) => {
+        const orientation = getBulkImageOrientation(product.id);
+        return sum + (IMAGE_PRICING[orientation] || IMAGE_PRICING.horizontal);
+    }, 0);
+}
+
+function updateGenerateButtonLabel() {
+    if (state.mode === "single") {
+        const amount = getSingleGenerationCost();
+        elements.generateButton.textContent = "Generate";
+        elements.costEstimate.textContent = amount ? `Cost ~ ${formatUsdAmount(amount)}` : "";
+        setVisible(elements.costEstimate, Boolean(amount));
+        return;
+    }
+
+    const selectedCount = state.selectedProductIds.size;
+    const amount = getBulkGenerationCost();
+    elements.generateButton.textContent = "Generate selected";
+    elements.costEstimate.textContent =
+        selectedCount > 0 ? `Cost ~ ${formatUsdAmount(amount)}` : "";
+    setVisible(elements.costEstimate, selectedCount > 0);
+}
+
+function scheduleCostEstimateRefresh() {
+    window.requestAnimationFrame(() => {
+        updateGenerateButtonLabel();
+    });
 }
 
 function readStoredHistory(key) {
@@ -578,6 +728,13 @@ function setBakeriesLoading(isLoading) {
     state.bakeriesLoading = isLoading;
     if (isLoading) {
         elements.bakerySelect.disabled = true;
+        elements.bakerySearchInput.disabled = true;
+        setBakeryDropdownOpen(false);
+        elements.bakerySearchInput.placeholder = "Loading bakeries...";
+    }
+    if (!isLoading) {
+        elements.bakerySearchInput.disabled = false;
+        elements.bakerySearchInput.placeholder = "Choose a bakery";
     }
     setVisible(elements.controlsLoadingOverlay, state.mode === "bulk" && isLoading);
     updateStepVisibility();
@@ -593,6 +750,92 @@ function updateSelectAllProductsLabel() {
     const count = state.products.length;
     elements.selectAllProductsLabel.textContent =
         count > 0 ? `Select all (${count})` : "Select all";
+}
+
+function getMatchingScenePresetId() {
+    const preset = SCENE_PRESETS.find(
+        (item) =>
+            item.wall === elements.wallSelect.value &&
+            item.table === elements.tableSelect.value &&
+            item.stand === elements.standSelect.value,
+    );
+
+    return preset?.id || "";
+}
+
+function updateSceneCustomizeVisibility() {
+    setVisible(elements.sceneCustomizePanel, state.sceneCustomizeOpen);
+    setVisible(elements.scenePresetGrid, !state.sceneCustomizeOpen);
+    elements.toggleSceneCustomizeButton.textContent = state.sceneCustomizeOpen
+        ? "Choose preset"
+        : "Customize";
+    elements.toggleSceneCustomizeButton.setAttribute(
+        "aria-expanded",
+        String(state.sceneCustomizeOpen),
+    );
+    syncScenePresetSelection();
+}
+
+function renderScenePresets() {
+    elements.scenePresetGrid.innerHTML = SCENE_PRESETS.map(
+        (preset) => `
+            <button
+                class="scene-preset-card ${preset.type === "utility" ? "scene-preset-card-utility" : ""}"
+                type="button"
+                data-scene-preset-id="${preset.id}"
+            >
+                ${
+                    preset.type === "utility"
+                        ? `
+                            <div class="scene-preset-utility-thumb" aria-hidden="true">
+                                <div class="scene-preset-utility-icon">✦</div>
+                            </div>
+                        `
+                        : `<img class="scene-preset-thumb" src="${preset.image}" alt="${preset.name}" />`
+                }
+                <span class="scene-preset-name">${preset.name}</span>
+            </button>
+        `,
+    ).join("");
+
+    syncScenePresetSelection();
+}
+
+function syncScenePresetSelection() {
+    const activePreset = SCENE_PRESETS.find((preset) => preset.id === state.selectedScenePresetId);
+    elements.selectedSceneName.textContent = state.sceneCustomizeOpen
+        ? "Custom"
+        : activePreset
+          ? activePreset.name
+          : "Custom";
+
+    elements.scenePresetGrid.querySelectorAll("[data-scene-preset-id]").forEach((button) => {
+        button.classList.toggle(
+            "is-active",
+            button.dataset.scenePresetId === state.selectedScenePresetId,
+        );
+    });
+}
+
+function applyScenePreset(presetId, options = {}) {
+    const preset = SCENE_PRESETS.find((item) => item.id === presetId);
+
+    if (!preset) {
+        return;
+    }
+
+    elements.wallSelect.value = preset.wall;
+    elements.tableSelect.value = preset.table;
+    elements.standSelect.value = preset.stand;
+    state.selectedScenePresetId = preset.id;
+
+    if (options.closeCustomize !== false) {
+        state.sceneCustomizeOpen = false;
+    }
+
+    syncScenePresetSelection();
+    updateSceneCustomizeVisibility();
+    updatePromptFromSelections();
 }
 
 function syncProductCheckboxes() {
@@ -661,6 +904,82 @@ function fillSelect(select, options, placeholder) {
     });
 }
 
+function filterBakeries(searchTerm = "") {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    const selectedValue = elements.bakerySelect.value;
+
+    state.filteredBakeries = state.bakeries.filter((bakery) =>
+        !normalizedSearch || String(bakery.name || "").toLowerCase().includes(normalizedSearch),
+    );
+
+    fillSelect(elements.bakerySelect, state.filteredBakeries, "Choose a bakery");
+
+    if (
+        selectedValue &&
+        state.filteredBakeries.some((bakery) => String(bakery.id) === String(selectedValue))
+    ) {
+        elements.bakerySelect.value = selectedValue;
+    }
+
+    elements.bakerySelect.disabled = state.bakeriesLoading || state.filteredBakeries.length === 0;
+    renderBakeryDropdown();
+}
+
+function setBakeryDropdownOpen(isOpen) {
+    state.bakeryDropdownOpen = isOpen;
+    setVisible(
+        elements.bakeryDropdown,
+        isOpen && !state.bakeriesLoading && !elements.bakerySelect.disabled,
+    );
+}
+
+function renderBakeryDropdown() {
+    if (state.filteredBakeries.length === 0) {
+        elements.bakeryDropdown.innerHTML =
+            '<div class="search-select-empty">No bakeries found</div>';
+        return;
+    }
+
+    elements.bakeryDropdown.innerHTML = state.filteredBakeries
+        .map(
+            (bakery) => `
+                <button
+                    class="search-select-option ${String(bakery.id) === String(elements.bakerySelect.value) ? "is-active" : ""}"
+                    type="button"
+                    data-bakery-id="${bakery.id}"
+                >
+                    ${bakery.name}
+                </button>
+            `,
+        )
+        .join("");
+}
+
+function syncBakerySearchInput() {
+    const selectedOption = state.bakeries.find(
+        (bakery) => String(bakery.id) === String(elements.bakerySelect.value),
+    );
+
+    elements.bakerySearchInput.value = selectedOption?.name || "";
+}
+
+function getBakeryDropdownSearchTerm() {
+    const currentValue = elements.bakerySearchInput.value.trim();
+    const selectedOption = state.bakeries.find(
+        (bakery) => String(bakery.id) === String(elements.bakerySelect.value),
+    );
+
+    if (
+        selectedOption &&
+        currentValue &&
+        currentValue.toLowerCase() === String(selectedOption.name || "").trim().toLowerCase()
+    ) {
+        return "";
+    }
+
+    return currentValue;
+}
+
 function getSelectedOption(options, value) {
     return options.find((option) => option.value === value) || null;
 }
@@ -722,6 +1041,8 @@ function isSceneReady() {
 
 function updatePromptFromSelections() {
     const prompt = buildPrompt();
+    state.selectedScenePresetId = getMatchingScenePresetId();
+    syncScenePresetSelection();
 
     if (prompt) {
         elements.promptEditor.value = prompt;
@@ -733,11 +1054,8 @@ function updatePromptFromSelections() {
 }
 
 function resetSceneSelections() {
-    elements.wallSelect.selectedIndex = 0;
-    elements.tableSelect.selectedIndex = 0;
-    elements.standSelect.selectedIndex = 0;
+    applyScenePreset(SCENE_PRESETS[0].id);
     setPromptVisibility(false);
-    updatePromptFromSelections();
 }
 
 function resetSingleResult() {
@@ -788,7 +1106,7 @@ function updateStepVisibility() {
     setVisible(elements.preserveSection, sourceReady && sceneReady);
     setVisible(elements.actionsSection, sourceReady && sceneReady);
 
-    elements.generateButton.textContent = isSingle ? "Generate" : "Generate selected";
+    updateGenerateButtonLabel();
 }
 
 function extractDroppedUrl(dataTransfer) {
@@ -887,8 +1205,9 @@ async function ensureBakeriesLoaded() {
     try {
         const payload = await fetchJson("/api/bakeries");
         state.bakeries = payload.bakeries || [];
-        fillSelect(elements.bakerySelect, state.bakeries, "Choose a bakery");
-        elements.bakerySelect.disabled = false;
+        state.filteredBakeries = [...state.bakeries];
+        filterBakeries(elements.bakerySearchInput.value);
+        syncBakerySearchInput();
         state.bakeriesLoaded = true;
     } catch (error) {
         fillSelect(elements.bakerySelect, [], "Could not load bakeries");
@@ -994,7 +1313,11 @@ function renderBulkSources() {
                         type="button"
                         data-image-src="${item.imageUrl}"
                     >
-                        <img src="${item.imageUrl}" alt="${item.name} source" />
+                        <img
+                            src="${item.imageUrl}"
+                            alt="${item.name} source"
+                            data-product-image-id="${item.id}"
+                        />
                     </button>
                     <div class="bulk-result-name">${item.name}</div>
                 </article>
@@ -1269,6 +1592,9 @@ elements.imageUrlInput.addEventListener("input", (event) => {
     handleImageUrlInput(event.target.value);
 });
 
+elements.sourcePreview.addEventListener("load", updateGenerateButtonLabel);
+elements.bulkSourcesGrid.addEventListener("load", updateGenerateButtonLabel, true);
+
 elements.singleResetButton.addEventListener("click", resetSingleSource);
 
 ["dragenter", "dragover", "drop"].forEach((eventName) => {
@@ -1312,12 +1638,63 @@ elements.dropzone.addEventListener("drop", async (event) => {
 
 elements.bakerySelect.addEventListener("change", async (event) => {
     try {
+        syncBakerySearchInput();
+        setBakeryDropdownOpen(false);
         setBulkSelectionLoading(Boolean(event.target.value));
         await loadCategories(event.target.value);
     } catch (error) {
         setStatus(error.message, true);
     } finally {
         setBulkSelectionLoading(false);
+    }
+});
+
+elements.bakerySearchInput.addEventListener("input", (event) => {
+    filterBakeries(event.target.value);
+    setBakeryDropdownOpen(true);
+});
+
+elements.bakerySearchInput.addEventListener("focus", () => {
+    if (!state.bakeriesLoading) {
+        filterBakeries(getBakeryDropdownSearchTerm());
+        setBakeryDropdownOpen(true);
+    }
+});
+
+elements.bakeryComboboxButton.addEventListener("click", () => {
+    if (state.bakeriesLoading || elements.bakerySelect.disabled) {
+        return;
+    }
+
+    filterBakeries(getBakeryDropdownSearchTerm());
+    setBakeryDropdownOpen(!state.bakeryDropdownOpen);
+});
+
+elements.bakeryDropdown.addEventListener("click", async (event) => {
+    const option = event.target.closest("[data-bakery-id]");
+
+    if (!option) {
+        return;
+    }
+
+    elements.bakerySelect.value = option.dataset.bakeryId;
+    syncBakerySearchInput();
+    renderBakeryDropdown();
+    setBakeryDropdownOpen(false);
+
+    try {
+        setBulkSelectionLoading(Boolean(elements.bakerySelect.value));
+        await loadCategories(elements.bakerySelect.value);
+    } catch (error) {
+        setStatus(error.message, true);
+    } finally {
+        setBulkSelectionLoading(false);
+    }
+});
+
+document.addEventListener("click", (event) => {
+    if (!elements.bakeryCombobox.contains(event.target)) {
+        setBakeryDropdownOpen(false);
     }
 });
 
@@ -1337,6 +1714,7 @@ elements.selectAllProducts.addEventListener("change", (event) => {
     }
 
     syncProductCheckboxes();
+    updateGenerateButtonLabel();
 });
 
 elements.bulkSourcesGrid.addEventListener("change", (event) => {
@@ -1354,11 +1732,28 @@ elements.bulkSourcesGrid.addEventListener("change", (event) => {
 
     elements.selectAllProducts.checked =
         state.products.length > 0 && state.selectedProductIds.size === state.products.length;
+    updateGenerateButtonLabel();
 });
 
 elements.wallSelect.addEventListener("change", updatePromptFromSelections);
 elements.tableSelect.addEventListener("change", updatePromptFromSelections);
 elements.standSelect.addEventListener("change", updatePromptFromSelections);
+elements.preserveOrientation.addEventListener("change", updateGenerateButtonLabel);
+elements.preserveOrientation.addEventListener("click", scheduleCostEstimateRefresh);
+elements.preserveSection.addEventListener("click", scheduleCostEstimateRefresh);
+elements.toggleSceneCustomizeButton.addEventListener("click", () => {
+    state.sceneCustomizeOpen = !state.sceneCustomizeOpen;
+    updateSceneCustomizeVisibility();
+});
+elements.scenePresetGrid.addEventListener("click", (event) => {
+    const presetButton = event.target.closest("[data-scene-preset-id]");
+
+    if (!presetButton) {
+        return;
+    }
+
+    applyScenePreset(presetButton.dataset.scenePresetId);
+});
 
 elements.togglePromptButton.addEventListener("click", () => {
     const isCollapsed = elements.promptEditorWrap.classList.contains("is-collapsed");
@@ -1492,6 +1887,8 @@ elements.saveButton.addEventListener("click", () => {
 fillSelect(elements.wallSelect, PROMPT_OPTIONS.walls);
 fillSelect(elements.tableSelect, PROMPT_OPTIONS.tables);
 fillSelect(elements.standSelect, PROMPT_OPTIONS.stands);
+renderScenePresets();
+updateSceneCustomizeVisibility();
 resetSceneSelections();
 updatePreview(elements.sourcePreview, elements.sourcePlaceholder, "");
 updatePreview(elements.resultPreview, elements.resultPlaceholder, "");

@@ -3,37 +3,53 @@ const elements = {
     bulkModeButton: document.getElementById("bulkModeButton"),
     singleControls: document.getElementById("singleControls"),
     bulkControls: document.getElementById("bulkControls"),
+    controlsLoadingOverlay: document.getElementById("controlsLoadingOverlay"),
+    singleDropzoneWrap: document.getElementById("singleDropzoneWrap"),
     dropzone: document.getElementById("dropzone"),
     fileInput: document.getElementById("fileInput"),
     imageUrlInput: document.getElementById("imageUrlInput"),
+    singleResetButton: document.getElementById("singleResetButton"),
     singleSourceSection: document.getElementById("singleSourceSection"),
+    bakerySection: document.getElementById("bakerySection"),
     bakerySelect: document.getElementById("bakerySelect"),
+    bulkSelectionLoader: document.getElementById("bulkSelectionLoader"),
+    categorySection: document.getElementById("categorySection"),
     categorySelect: document.getElementById("categorySelect"),
     bulkSourceSection: document.getElementById("bulkSourceSection"),
     selectAllProducts: document.getElementById("selectAllProducts"),
+    bulkSourcesGrid: document.getElementById("bulkSourcesGrid"),
+    sceneSection: document.getElementById("sceneSection"),
+    wallField: document.getElementById("wallField"),
     wallSelect: document.getElementById("wallSelect"),
+    tableField: document.getElementById("tableField"),
     tableSelect: document.getElementById("tableSelect"),
+    standField: document.getElementById("standField"),
     standSelect: document.getElementById("standSelect"),
+    promptSection: document.getElementById("promptSection"),
     togglePromptButton: document.getElementById("togglePromptButton"),
     promptEditorWrap: document.getElementById("promptEditorWrap"),
     promptEditor: document.getElementById("promptEditor"),
+    preserveSection: document.getElementById("preserveSection"),
     preserveOrientation: document.getElementById("preserveOrientation"),
+    actionsSection: document.getElementById("actionsSection"),
     generateButton: document.getElementById("generateButton"),
     saveButton: document.getElementById("saveButton"),
+    singleDownloadSection: document.getElementById("singleDownloadSection"),
     sourcePreview: document.getElementById("sourcePreview"),
-    resultPreview: document.getElementById("resultPreview"),
     sourcePlaceholder: document.getElementById("sourcePlaceholder"),
+    resultPreview: document.getElementById("resultPreview"),
     resultPlaceholder: document.getElementById("resultPlaceholder"),
     resultLoader: document.getElementById("resultLoader"),
     singlePreviewSection: document.getElementById("singlePreviewSection"),
     bulkPreviewSection: document.getElementById("bulkPreviewSection"),
-    bulkSourcesGrid: document.getElementById("bulkSourcesGrid"),
     bulkResultsGrid: document.getElementById("bulkResultsGrid"),
     bulkResultLoader: document.getElementById("bulkResultLoader"),
     bulkDownloadAllButton: document.getElementById("bulkDownloadAllButton"),
+    bulkDownloadSection: document.getElementById("bulkDownloadSection"),
     bulkErrors: document.getElementById("bulkErrors"),
     status: document.getElementById("status"),
     lightbox: document.getElementById("lightbox"),
+    lightboxSourceImage: document.getElementById("lightboxSourceImage"),
     lightboxImage: document.getElementById("lightboxImage"),
     lightboxClose: document.getElementById("lightboxClose"),
 };
@@ -55,6 +71,41 @@ const PROMPT_OPTIONS = {
             label: "White",
             prompt: "wall: soft white, smooth and clean, with no texture or patterns",
         },
+        {
+            value: "cream",
+            label: "Cream",
+            prompt: "wall: soft cream, smooth and clean, with no texture or patterns",
+        },
+        {
+            value: "mint",
+            label: "Pale mint",
+            prompt: "wall: very pale mint green, smooth and clean, with no texture or patterns",
+        },
+        {
+            value: "warm-white-stone",
+            label: "Warm white stone",
+            prompt: "wall: warm white natural stone, clean and refined, with very subtle stone texture",
+        },
+        {
+            value: "cool-gray-stone",
+            label: "Cool gray stone",
+            prompt: "wall: cool light gray stone wall, elegant and minimal, with soft natural stone texture",
+        },
+        {
+            value: "sand-plaster",
+            label: "Sand plaster",
+            prompt: "wall: soft sand-colored plaster wall, clean and minimal, with gentle plaster texture",
+        },
+        {
+            value: "chalk-white",
+            label: "Chalk white",
+            prompt: "wall: chalky white wall, matte and soft, with a subtle natural finish",
+        },
+        {
+            value: "light-oak-panels",
+            label: "Light oak panels",
+            prompt: "wall: light oak wooden wall panels, clean, modern, and evenly finished",
+        },
     ],
     tables: [
         {
@@ -72,6 +123,51 @@ const PROMPT_OPTIONS = {
             label: "White without texture",
             prompt: "table: clean white surface with no visible texture",
         },
+        {
+            value: "stone-beige",
+            label: "Light beige stone",
+            prompt: "table: very light beige stone surface, soft matte look, clean and minimal",
+        },
+        {
+            value: "gray-smooth",
+            label: "Soft light gray",
+            prompt: "table: smooth light gray surface with a clean minimal finish",
+        },
+        {
+            value: "white-marble",
+            label: "White marble",
+            prompt: "table: white marble surface with subtle natural veining, clean and refined",
+        },
+        {
+            value: "beige-stone",
+            label: "Beige stone",
+            prompt: "table: soft beige stone surface, minimal, matte, and elegant",
+        },
+        {
+            value: "gray-stone",
+            label: "Cool gray stone",
+            prompt: "table: cool light gray stone surface, clean, modern, and softly matte",
+        },
+        {
+            value: "oak-wood",
+            label: "Natural oak wood",
+            prompt: "table: natural oak wood surface, smooth, clean, and softly finished",
+        },
+        {
+            value: "walnut-wood",
+            label: "Light walnut wood",
+            prompt: "table: light walnut wooden surface, warm, clean, and polished with a natural grain",
+        },
+        {
+            value: "cream-matte",
+            label: "Cream matte",
+            prompt: "table: smooth cream matte surface with no strong texture, clean and minimal",
+        },
+        {
+            value: "white-stone",
+            label: "Soft white stone",
+            prompt: "table: soft white stone surface, clean and modern, with a subtle natural texture",
+        },
     ],
     stands: [
         {
@@ -85,20 +181,35 @@ const PROMPT_OPTIONS = {
             prompt: "place the product on a silver cardboard cake base",
         },
         {
-            value: "white-pedestal",
-            label: "White pedestal stand",
-            prompt: "place the product on a white pedestal stand",
+            value: "gold-board",
+            label: "Gold cardboard base",
+            prompt: "place the product on a gold cardboard cake base",
         },
         {
             value: "white-plate",
             label: "Large white plate",
             prompt: "place the product on a large white plate",
         },
+        {
+            value: "white-pedestal",
+            label: "White pedestal stand",
+            prompt: "place the product on a white pedestal stand",
+        },
+        {
+            value: "wooden-pedestal",
+            label: "Wooden pedestal stand",
+            prompt: "place the product on a wooden pedestal stand",
+        },
+        {
+            value: "round-wooden-tray",
+            label: "Round wooden tray",
+            prompt: "place the product on a round wooden serving tray with a clean natural finish",
+        },
     ],
 };
 
 const state = {
-    mode: "single",
+    mode: "bulk",
     sourceImageDataUrl: "",
     sourceImageUrl: "",
     resultImageDataUrl: "",
@@ -109,11 +220,61 @@ const state = {
     products: [],
     selectedProductIds: new Set(),
     bulkResults: [],
+    bulkSelectionLoading: false,
+    bakeriesLoading: false,
+    bakeriesFailed: false,
 };
 
-function setStatus(message, isError = false) {
+const STORAGE_KEYS = {
+    singleHistory: "ai-images-single-history",
+    bulkHistory: "ai-images-bulk-history",
+};
+
+const DB_CONFIG = {
+    name: "ai-images-history-db",
+    version: 1,
+    singleStore: "single-generations",
+    bulkStore: "bulk-generations",
+};
+
+const STORAGE_LIMIT = 100;
+
+function setStatus(message = "", isError = false) {
     elements.status.textContent = message;
     elements.status.style.color = isError ? "#a13d29" : "";
+}
+
+function setVisible(element, isVisible) {
+    element.classList.toggle("is-hidden", !isVisible);
+}
+
+function readStoredHistory(key) {
+    try {
+        const rawValue = window.localStorage.getItem(key);
+
+        if (!rawValue) {
+            return [];
+        }
+
+        const parsed = JSON.parse(rawValue);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
+}
+
+function writeStoredHistory(key, items) {
+    try {
+        window.localStorage.setItem(key, JSON.stringify(items.slice(0, STORAGE_LIMIT)));
+    } catch (error) {
+        console.warn("Could not write history summary to localStorage.", error);
+    }
+}
+
+function appendStoredHistory(key, entry) {
+    const history = readStoredHistory(key);
+    history.unshift(entry);
+    writeStoredHistory(key, history);
 }
 
 function scrollToWorkspaceTop() {
@@ -138,27 +299,149 @@ function updatePreview(preview, placeholder, src) {
 }
 
 function setSingleResultLoading(isLoading) {
-    elements.resultLoader.classList.toggle("is-hidden", !isLoading);
+    setVisible(elements.resultLoader, isLoading);
+    if (isLoading) {
+        setVisible(elements.singleDownloadSection, false);
+    }
 }
 
 function setBulkResultLoading(isLoading) {
-    elements.bulkResultLoader.classList.toggle("is-hidden", !isLoading);
+    setVisible(elements.bulkResultLoader, isLoading);
+    if (isLoading) {
+        setVisible(elements.bulkDownloadSection, false);
+    }
 }
 
-function setSingleSourceVisibility(isVisible) {
-    elements.singleSourceSection.classList.toggle("is-hidden", !isVisible);
+function getSelectedText(select) {
+    return select.options[select.selectedIndex]?.textContent?.trim() || "";
 }
 
-function setBulkSourceVisibility(isVisible) {
-    elements.bulkSourceSection.classList.toggle("is-hidden", !isVisible);
+function createHistoryId(prefix) {
+    return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function openLightbox(imageSrc) {
-    if (!imageSrc) {
+function openHistoryDb() {
+    return new Promise((resolve, reject) => {
+        const request = window.indexedDB.open(DB_CONFIG.name, DB_CONFIG.version);
+
+        request.onupgradeneeded = () => {
+            const db = request.result;
+
+            if (!db.objectStoreNames.contains(DB_CONFIG.singleStore)) {
+                db.createObjectStore(DB_CONFIG.singleStore, { keyPath: "id" });
+            }
+
+            if (!db.objectStoreNames.contains(DB_CONFIG.bulkStore)) {
+                db.createObjectStore(DB_CONFIG.bulkStore, { keyPath: "id" });
+            }
+        };
+
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error || new Error("Could not open IndexedDB."));
+    });
+}
+
+function putIndexedDbRecord(storeName, value) {
+    return openHistoryDb().then(
+        (db) =>
+            new Promise((resolve, reject) => {
+                const transaction = db.transaction(storeName, "readwrite");
+                const store = transaction.objectStore(storeName);
+
+                transaction.oncomplete = () => {
+                    db.close();
+                    resolve();
+                };
+                transaction.onerror = () => {
+                    db.close();
+                    reject(transaction.error || new Error("Could not write IndexedDB record."));
+                };
+
+                store.put(value);
+            }),
+    );
+}
+
+async function storeSingleGeneration(resultImageDataUrl) {
+    const id = createHistoryId("single");
+    const date = new Date().toISOString();
+
+    await putIndexedDbRecord(DB_CONFIG.singleStore, {
+        id,
+        date,
+        resultImageDataUrl,
+        sourceImageDataUrl: state.sourceImageDataUrl || "",
+        sourceImageUrl: state.sourceImageUrl || "",
+    });
+
+    appendStoredHistory(STORAGE_KEYS.singleHistory, {
+        id,
+        date,
+        hasSourceImageDataUrl: Boolean(state.sourceImageDataUrl),
+        hasSourceImageUrl: Boolean(state.sourceImageUrl),
+        hasResultImageDataUrl: Boolean(resultImageDataUrl),
+    });
+}
+
+async function storeBulkGeneration(results) {
+    const id = createHistoryId("bulk");
+    const date = new Date().toISOString();
+
+    await putIndexedDbRecord(DB_CONFIG.bulkStore, {
+        id,
+        date,
+        bakeryId: elements.bakerySelect.value || "",
+        categoryId: elements.categorySelect.value || "",
+        results,
+    });
+
+    appendStoredHistory(STORAGE_KEYS.bulkHistory, {
+        id,
+        date,
+        bakeryId: elements.bakerySelect.value || "",
+        categoryId: elements.categorySelect.value || "",
+        resultCount: Array.isArray(results) ? results.length : 0,
+    });
+}
+
+function setBulkSelectionLoading(isLoading) {
+    state.bulkSelectionLoading = isLoading;
+    setVisible(elements.bulkSelectionLoader, isLoading);
+    updateStepVisibility();
+}
+
+function setBakeriesLoading(isLoading) {
+    state.bakeriesLoading = isLoading;
+    if (isLoading) {
+        elements.bakerySelect.disabled = true;
+    }
+    setVisible(elements.controlsLoadingOverlay, state.mode === "bulk" && isLoading);
+    updateStepVisibility();
+}
+
+function setPromptVisibility(isVisible) {
+    elements.promptEditorWrap.classList.toggle("is-collapsed", !isVisible);
+    elements.togglePromptButton.textContent = isVisible ? "Hide prompt" : "Show prompt";
+    elements.togglePromptButton.setAttribute("aria-expanded", String(isVisible));
+}
+
+function openLightbox({ sourceSrc = "", resultSrc = "" }) {
+    if (!sourceSrc && !resultSrc) {
         return;
     }
 
-    elements.lightboxImage.src = imageSrc;
+    if (sourceSrc) {
+        elements.lightboxSourceImage.src = sourceSrc;
+    } else {
+        elements.lightboxSourceImage.removeAttribute("src");
+    }
+
+    if (resultSrc) {
+        elements.lightboxImage.src = resultSrc;
+    } else {
+        elements.lightboxImage.removeAttribute("src");
+    }
+
     elements.lightbox.classList.remove("is-hidden");
     elements.lightbox.setAttribute("aria-hidden", "false");
 }
@@ -166,45 +449,8 @@ function openLightbox(imageSrc) {
 function closeLightbox() {
     elements.lightbox.classList.add("is-hidden");
     elements.lightbox.setAttribute("aria-hidden", "true");
+    elements.lightboxSourceImage.removeAttribute("src");
     elements.lightboxImage.removeAttribute("src");
-}
-
-function getSelectedOption(options, value) {
-    return options.find((option) => option.value === value) || options[0];
-}
-
-function buildPrompt() {
-    const wall = getSelectedOption(PROMPT_OPTIONS.walls, elements.wallSelect.value);
-    const table = getSelectedOption(PROMPT_OPTIONS.tables, elements.tableSelect.value);
-    const stand = getSelectedOption(PROMPT_OPTIONS.stands, elements.standSelect.value);
-
-    return [
-        "Improve the product photo quality while keeping the product itself realistic and unchanged.",
-        "",
-        "Background and surface requirements:",
-        `- ${wall.prompt}`,
-        `- ${table.prompt}`,
-        "",
-        "Stand or plate requirement:",
-        `- ${stand.prompt}`,
-        "",
-        "Lighting requirements:",
-        "- use soft, diffused lighting",
-        "- remove harsh or heavy shadows",
-        "",
-        "Preserve the product exactly:",
-        "- do not change the shape, colors, decorations, proportions, or details of the product",
-        "",
-        "Realism requirements:",
-        "- the result must look like a real professional product photo",
-        "- no collage look, no cut-out edges, no floating effect",
-        "- natural contact between the product and the table, stand, or plate",
-        "- keep the final image clean, minimal, and realistic",
-    ].join("\n");
-}
-
-function updatePromptFromSelections() {
-    elements.promptEditor.value = buildPrompt();
 }
 
 function fillSelect(select, options, placeholder) {
@@ -225,10 +471,131 @@ function fillSelect(select, options, placeholder) {
     });
 }
 
-function setPromptVisibility(isVisible) {
-    elements.promptEditorWrap.classList.toggle("is-collapsed", !isVisible);
-    elements.togglePromptButton.textContent = isVisible ? "Hide prompt" : "Show prompt";
-    elements.togglePromptButton.setAttribute("aria-expanded", String(isVisible));
+function getSelectedOption(options, value) {
+    return options.find((option) => option.value === value) || null;
+}
+
+function buildPrompt() {
+    const wall = getSelectedOption(PROMPT_OPTIONS.walls, elements.wallSelect.value);
+    const table = getSelectedOption(PROMPT_OPTIONS.tables, elements.tableSelect.value);
+    const stand = getSelectedOption(PROMPT_OPTIONS.stands, elements.standSelect.value);
+
+    if (!wall || !table || !stand) {
+        return "";
+    }
+
+    return [
+        "Improve the product photo quality while keeping the product itself realistic and unchanged.",
+        "",
+        "Background and surface requirements:",
+        `- ${wall.prompt}`,
+        `- ${table.prompt}`,
+        "",
+        "Stand or plate requirement:",
+        `- ${stand.prompt}`,
+        "",
+        "Lighting requirements:",
+        "- use soft, diffused lighting",
+        "- remove harsh or heavy shadows",
+        "- remove any surrounding objects or props if they are present",
+        "- remove any visible logos, labels, or branding if they are present",
+        "",
+        "Preserve the product exactly:",
+        "- do not change the shape, colors, decorations, proportions, or details of the product",
+        "",
+        "Realism requirements:",
+        "- the result must look like a real professional product photo",
+        "- no collage look, no cut-out edges, no floating effect",
+        "- natural contact between the product and the table, stand, or plate",
+        "- keep the final image clean, minimal, and realistic",
+    ].join("\n");
+}
+
+function hasSingleSource() {
+    return Boolean(state.sourceImageDataUrl || state.sourceImageUrl);
+}
+
+function hasBulkSource() {
+    return state.products.length > 0;
+}
+
+function isSceneReady() {
+    return Boolean(
+        elements.wallSelect.value &&
+            elements.tableSelect.value &&
+            elements.standSelect.value,
+    );
+}
+
+function updatePromptFromSelections() {
+    const prompt = buildPrompt();
+
+    if (prompt) {
+        elements.promptEditor.value = prompt;
+    } else {
+        elements.promptEditor.value = "";
+    }
+
+    updateStepVisibility();
+}
+
+function resetSceneSelections() {
+    elements.wallSelect.selectedIndex = 0;
+    elements.tableSelect.selectedIndex = 0;
+    elements.standSelect.selectedIndex = 0;
+    setPromptVisibility(false);
+    updatePromptFromSelections();
+}
+
+function resetSingleResult() {
+    state.resultImageDataUrl = "";
+    updatePreview(elements.resultPreview, elements.resultPlaceholder, "");
+    setVisible(elements.singleDownloadSection, false);
+}
+
+function resetSingleSource() {
+    state.sourceImageDataUrl = "";
+    state.sourceImageUrl = "";
+    state.uploadedFileName = "";
+    elements.fileInput.value = "";
+    elements.imageUrlInput.value = "";
+    updatePreview(elements.sourcePreview, elements.sourcePlaceholder, "");
+    resetSingleResult();
+    resetSceneSelections();
+    updateStepVisibility();
+    setStatus("");
+}
+
+function updateStepVisibility() {
+    const isSingle = state.mode === "single";
+    const sourceReady = isSingle ? hasSingleSource() : hasBulkSource();
+    const sceneReady = isSceneReady();
+    const showBakerySection =
+        !isSingle && (!state.bakeriesLoading || state.bakeriesLoaded || state.bakeriesFailed);
+
+    setVisible(elements.singlePreviewSection, isSingle);
+    setVisible(elements.bulkPreviewSection, !isSingle);
+    setVisible(elements.singleControls, isSingle);
+    setVisible(elements.bulkControls, !isSingle);
+    setVisible(elements.bakerySection, showBakerySection);
+
+    setVisible(elements.singleDropzoneWrap, isSingle && !hasSingleSource());
+    setVisible(elements.singleSourceSection, isSingle && hasSingleSource());
+    setVisible(
+        elements.categorySection,
+        !isSingle && Boolean(elements.bakerySelect.value) && !state.bulkSelectionLoading,
+    );
+    setVisible(elements.bulkSourceSection, !isSingle && hasBulkSource());
+
+    setVisible(elements.sceneSection, sourceReady);
+    setVisible(elements.wallField, sourceReady);
+    setVisible(elements.tableField, sourceReady);
+    setVisible(elements.standField, sourceReady);
+    setVisible(elements.promptSection, sourceReady && sceneReady);
+    setVisible(elements.preserveSection, sourceReady && sceneReady);
+    setVisible(elements.actionsSection, sourceReady && sceneReady);
+
+    elements.generateButton.textContent = isSingle ? "Generate" : "Generate selected";
 }
 
 function extractDroppedUrl(dataTransfer) {
@@ -246,12 +613,7 @@ function extractDroppedUrl(dataTransfer) {
     }
 
     const plainText = dataTransfer.getData("text/plain").trim();
-
-    if (/^https?:\/\//i.test(plainText)) {
-        return plainText;
-    }
-
-    return "";
+    return /^https?:\/\//i.test(plainText) ? plainText : "";
 }
 
 async function readFileAsDataUrl(file) {
@@ -278,12 +640,11 @@ async function handleFile(file) {
     state.sourceImageUrl = "";
     state.uploadedFileName = file.name;
     elements.imageUrlInput.value = "";
-    state.resultImageDataUrl = "";
+    resetSingleResult();
     updatePreview(elements.sourcePreview, elements.sourcePlaceholder, dataUrl);
-    updatePreview(elements.resultPreview, elements.resultPlaceholder, "");
-    setSingleSourceVisibility(true);
-    elements.saveButton.disabled = true;
-    setStatus(`File ready: ${file.name}`);
+    resetSceneSelections();
+    updateStepVisibility();
+    setStatus("");
 }
 
 function handleImageUrlInput(value) {
@@ -291,24 +652,24 @@ function handleImageUrlInput(value) {
 
     state.sourceImageUrl = trimmedValue;
     state.sourceImageDataUrl = "";
-    state.resultImageDataUrl = "";
     state.uploadedFileName = trimmedValue
         ? trimmedValue.split("/").pop()?.split("?")[0] || "remote-image"
         : "";
 
-    updatePreview(elements.resultPreview, elements.resultPlaceholder, "");
-    elements.saveButton.disabled = true;
+    resetSingleResult();
 
     if (!trimmedValue) {
         updatePreview(elements.sourcePreview, elements.sourcePlaceholder, "");
-        setSingleSourceVisibility(false);
-        setStatus("Choose an image and edit the prompt if needed.");
+        resetSceneSelections();
+        updateStepVisibility();
+        setStatus("");
         return;
     }
 
     updatePreview(elements.sourcePreview, elements.sourcePlaceholder, trimmedValue);
-    setSingleSourceVisibility(true);
-    setStatus("Image URL ready.");
+    resetSceneSelections();
+    updateStepVisibility();
+    setStatus("");
 }
 
 async function fetchJson(url) {
@@ -327,10 +688,23 @@ async function ensureBakeriesLoaded() {
         return;
     }
 
-    const payload = await fetchJson("/api/bakeries");
-    state.bakeries = payload.bakeries || [];
-    fillSelect(elements.bakerySelect, state.bakeries, "Choose a bakery");
-    state.bakeriesLoaded = true;
+    setBakeriesLoading(true);
+    state.bakeriesFailed = false;
+
+    try {
+        const payload = await fetchJson("/api/bakeries");
+        state.bakeries = payload.bakeries || [];
+        fillSelect(elements.bakerySelect, state.bakeries, "Choose a bakery");
+        elements.bakerySelect.disabled = false;
+        state.bakeriesLoaded = true;
+    } catch (error) {
+        fillSelect(elements.bakerySelect, [], "Could not load bakeries");
+        elements.bakerySelect.disabled = true;
+        state.bakeriesFailed = true;
+        throw error;
+    } finally {
+        setBakeriesLoading(false);
+    }
 }
 
 async function loadCategories(bakeryId) {
@@ -339,8 +713,10 @@ async function loadCategories(bakeryId) {
     state.selectedProductIds.clear();
     elements.categorySelect.disabled = true;
     fillSelect(elements.categorySelect, [], "Choose a category");
+    resetSceneSelections();
     renderBulkSources();
     renderBulkResults([]);
+    updateStepVisibility();
 
     if (!bakeryId) {
         return;
@@ -350,13 +726,38 @@ async function loadCategories(bakeryId) {
     state.categories = payload.categories || [];
     fillSelect(elements.categorySelect, state.categories, "Choose a category");
     elements.categorySelect.disabled = false;
+    updateStepVisibility();
+
+    if (state.categories.length > 0) {
+        let selectedCategoryId = "";
+
+        for (const category of state.categories) {
+            // Try categories in order and keep the first one that actually has products.
+            // This makes the auto-selection feel intentional instead of landing on an empty state.
+            await loadProducts(bakeryId, String(category.id));
+
+            if (state.products.length > 0) {
+                selectedCategoryId = String(category.id);
+                break;
+            }
+        }
+
+        if (!selectedCategoryId) {
+            selectedCategoryId = String(state.categories[0].id);
+            await loadProducts(bakeryId, selectedCategoryId);
+        }
+
+        elements.categorySelect.value = selectedCategoryId;
+    }
 }
 
 async function loadProducts(bakeryId, categoryId) {
     state.products = [];
     state.selectedProductIds.clear();
+    resetSceneSelections();
     renderBulkSources();
     renderBulkResults([]);
+    updateStepVisibility();
 
     if (!bakeryId || !categoryId) {
         return;
@@ -371,17 +772,17 @@ async function loadProducts(bakeryId, categoryId) {
     });
     elements.selectAllProducts.checked = state.products.length > 0;
     renderBulkSources();
+    updateStepVisibility();
 }
 
 function renderBulkSources() {
     if (state.products.length === 0) {
         elements.bulkSourcesGrid.className = "bulk-results-grid empty-state";
         elements.bulkSourcesGrid.textContent = "Choose a bakery and category to load products.";
-        setBulkSourceVisibility(false);
+        updateStepVisibility();
         return;
     }
 
-    setBulkSourceVisibility(true);
     elements.bulkSourcesGrid.className = "bulk-results-grid";
     elements.bulkSourcesGrid.innerHTML = state.products
         .map(
@@ -409,14 +810,16 @@ function renderBulkSources() {
 
 function renderBulkResults(results) {
     state.bulkResults = results;
-
     const successes = results.filter((item) => item.imageDataUrl);
     const errors = results.filter((item) => item.error);
+
     elements.bulkDownloadAllButton.disabled = successes.length === 0;
+    setVisible(elements.bulkDownloadSection, successes.length > 0);
 
     if (successes.length === 0) {
         elements.bulkResultsGrid.className = "bulk-results-grid empty-state";
-        elements.bulkResultsGrid.textContent = "Generated product images will appear here.";
+        elements.bulkResultsGrid.innerHTML =
+            '<div class="empty-state-copy">Generated images will appear here after processing.</div>';
     } else {
         elements.bulkResultsGrid.className = "bulk-results-grid";
         elements.bulkResultsGrid.innerHTML = successes
@@ -427,6 +830,7 @@ function renderBulkResults(results) {
                             class="bulk-result-image-button bulk-result-thumb"
                             type="button"
                             data-image-src="${item.imageDataUrl}"
+                            data-source-src="${item.imageUrl}"
                         >
                             <img src="${item.imageDataUrl}" alt="${item.name}" />
                         </button>
@@ -449,23 +853,57 @@ function renderBulkResults(results) {
         .join("");
 }
 
+async function readNdjsonStream(response, onMessage) {
+    if (!response.body) {
+        throw new Error("Streaming is not supported in this browser.");
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+        const { value, done } = await reader.read();
+        buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        lines.forEach((line) => {
+            const trimmedLine = line.trim();
+
+            if (!trimmedLine) {
+                return;
+            }
+
+            onMessage(JSON.parse(trimmedLine));
+        });
+
+        if (done) {
+            break;
+        }
+    }
+
+    if (buffer.trim()) {
+        onMessage(JSON.parse(buffer.trim()));
+    }
+}
+
 function setMode(mode) {
     state.mode = mode;
     const isSingle = mode === "single";
 
     elements.singleModeButton.classList.toggle("is-active", isSingle);
     elements.bulkModeButton.classList.toggle("is-active", !isSingle);
-    elements.singleControls.classList.toggle("is-hidden", !isSingle);
-    elements.bulkControls.classList.toggle("is-hidden", isSingle);
-    elements.singlePreviewSection.classList.toggle("is-hidden", !isSingle);
-    elements.bulkPreviewSection.classList.toggle("is-hidden", isSingle);
-    elements.generateButton.textContent = isSingle ? "Generate" : "Generate selected";
+    setVisible(elements.controlsLoadingOverlay, !isSingle && state.bakeriesLoading);
 
     if (!isSingle) {
         ensureBakeriesLoaded().catch((error) => {
             setStatus(error.message, true);
         });
     }
+
+    updateStepVisibility();
 }
 
 function downloadImage(dataUrl, filenameBase) {
@@ -483,8 +921,8 @@ function downloadImage(dataUrl, filenameBase) {
 }
 
 async function generateSingle() {
-    if (!state.sourceImageDataUrl && !state.sourceImageUrl) {
-        setStatus("Please upload an image or provide an image URL first.", true);
+    if (!hasSingleSource()) {
+        setStatus("Please upload an image first.", true);
         return;
     }
 
@@ -497,7 +935,7 @@ async function generateSingle() {
     elements.saveButton.disabled = true;
     setSingleResultLoading(true);
     scrollToWorkspaceTop();
-    setStatus("Generation started. This may take a little while.");
+    setStatus("");
 
     try {
         const response = await fetch("/api/generate", {
@@ -521,8 +959,10 @@ async function generateSingle() {
 
         state.resultImageDataUrl = payload.imageDataUrl;
         updatePreview(elements.resultPreview, elements.resultPlaceholder, state.resultImageDataUrl);
+        await storeSingleGeneration(state.resultImageDataUrl);
         elements.saveButton.disabled = false;
-        setStatus(`Done. Result size: ${payload.size}`);
+        setVisible(elements.singleDownloadSection, true);
+        setStatus("");
     } catch (error) {
         setStatus(error.message, true);
     } finally {
@@ -555,7 +995,7 @@ async function generateBulk() {
     setBulkResultLoading(true);
     renderBulkResults([]);
     scrollToWorkspaceTop();
-    setStatus(`Generating ${selectedItems.length} products in parallel.`);
+    setStatus("");
 
     try {
         const response = await fetch("/api/generate-bulk", {
@@ -574,14 +1014,34 @@ async function generateBulk() {
             }),
         });
 
-        const payload = await response.json();
-
         if (!response.ok) {
+            const payload = await response.json();
             throw new Error(payload.error || "Bulk generation failed.");
         }
 
-        renderBulkResults(payload.results || []);
-        setStatus("Bulk generation finished.");
+        const progressiveResults = new Array(selectedItems.length);
+        let completedResults = null;
+
+        await readNdjsonStream(response, (message) => {
+            if (message.type === "result") {
+                progressiveResults[message.index] = message.result;
+                renderBulkResults(progressiveResults.filter(Boolean));
+                return;
+            }
+
+            if (message.type === "complete") {
+                completedResults = Array.isArray(message.results) ? message.results : [];
+                renderBulkResults(completedResults);
+                return;
+            }
+
+            if (message.type === "error") {
+                throw new Error(message.error || "Bulk generation failed.");
+            }
+        });
+
+        await storeBulkGeneration(completedResults || progressiveResults.filter(Boolean));
+        setStatus("");
     } catch (error) {
         renderBulkResults([]);
         setStatus(error.message, true);
@@ -613,6 +1073,8 @@ elements.fileInput.addEventListener("change", async (event) => {
 elements.imageUrlInput.addEventListener("input", (event) => {
     handleImageUrlInput(event.target.value);
 });
+
+elements.singleResetButton.addEventListener("click", resetSingleSource);
 
 ["dragenter", "dragover", "drop"].forEach((eventName) => {
     window.addEventListener(eventName, (event) => {
@@ -655,9 +1117,12 @@ elements.dropzone.addEventListener("drop", async (event) => {
 
 elements.bakerySelect.addEventListener("change", async (event) => {
     try {
+        setBulkSelectionLoading(Boolean(event.target.value));
         await loadCategories(event.target.value);
     } catch (error) {
         setStatus(error.message, true);
+    } finally {
+        setBulkSelectionLoading(false);
     }
 });
 
@@ -694,7 +1159,6 @@ elements.bulkSourcesGrid.addEventListener("change", (event) => {
 
     elements.selectAllProducts.checked =
         state.products.length > 0 && state.selectedProductIds.size === state.products.length;
-    renderBulkSources();
 });
 
 elements.wallSelect.addEventListener("change", updatePromptFromSelections);
@@ -708,13 +1172,19 @@ elements.togglePromptButton.addEventListener("click", () => {
 
 elements.resultPreview.addEventListener("click", () => {
     if (state.resultImageDataUrl) {
-        openLightbox(state.resultImageDataUrl);
+        openLightbox({
+            sourceSrc: state.sourceImageDataUrl || state.sourceImageUrl,
+            resultSrc: state.resultImageDataUrl,
+        });
     }
 });
 
 elements.sourcePreview.addEventListener("click", () => {
-    if (state.sourceImageDataUrl || state.sourceImageUrl) {
-        openLightbox(state.sourceImageDataUrl || state.sourceImageUrl);
+    if (hasSingleSource()) {
+        openLightbox({
+            sourceSrc: state.sourceImageDataUrl || state.sourceImageUrl,
+            resultSrc: state.sourceImageDataUrl || state.sourceImageUrl,
+        });
     }
 });
 
@@ -722,7 +1192,10 @@ elements.bulkSourcesGrid.addEventListener("click", (event) => {
     const imageButton = event.target.closest(".bulk-result-image-button");
 
     if (imageButton) {
-        openLightbox(imageButton.dataset.imageSrc);
+        openLightbox({
+            sourceSrc: imageButton.dataset.imageSrc,
+            resultSrc: imageButton.dataset.imageSrc,
+        });
     }
 });
 
@@ -730,7 +1203,10 @@ elements.bulkResultsGrid.addEventListener("click", (event) => {
     const imageButton = event.target.closest(".bulk-result-image-button");
 
     if (imageButton) {
-        openLightbox(imageButton.dataset.imageSrc);
+        openLightbox({
+            sourceSrc: imageButton.dataset.sourceSrc,
+            resultSrc: imageButton.dataset.imageSrc,
+        });
     }
 });
 
@@ -751,6 +1227,8 @@ elements.bulkDownloadAllButton.addEventListener("click", async () => {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
+                bakeryName: getSelectedText(elements.bakerySelect),
+                categoryName: getSelectedText(elements.categorySelect),
                 items: successes.map((item) => ({
                     name: item.name,
                     imageDataUrl: item.imageDataUrl,
@@ -767,7 +1245,15 @@ elements.bulkDownloadAllButton.addEventListener("click", async () => {
         const blobUrl = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = blobUrl;
-        link.download = "generated-results.zip";
+        const generationDate = new Date().toISOString().slice(0, 10);
+        const bakeryName = getSelectedText(elements.bakerySelect) || "bakery";
+        const categoryName = getSelectedText(elements.categorySelect) || "category";
+        const archiveName = `${bakeryName}-${categoryName}-${generationDate}`
+            .replace(/[<>:"/\\|?*\x00-\x1F]+/g, "-")
+            .replace(/\s+/g, "-")
+            .replace(/-+/g, "-")
+            .replace(/(^-|-$)/g, "");
+        link.download = `${archiveName || "generated-results"}.zip`;
         document.body.appendChild(link);
         link.click();
         link.remove();
@@ -782,7 +1268,6 @@ elements.bulkDownloadAllButton.addEventListener("click", async () => {
 });
 
 elements.lightboxClose.addEventListener("click", closeLightbox);
-
 elements.lightbox.addEventListener("click", (event) => {
     if (event.target === elements.lightbox) {
         closeLightbox();
@@ -817,15 +1302,14 @@ elements.saveButton.addEventListener("click", () => {
 fillSelect(elements.wallSelect, PROMPT_OPTIONS.walls);
 fillSelect(elements.tableSelect, PROMPT_OPTIONS.tables);
 fillSelect(elements.standSelect, PROMPT_OPTIONS.stands);
-updatePromptFromSelections();
+resetSceneSelections();
 updatePreview(elements.sourcePreview, elements.sourcePlaceholder, "");
 updatePreview(elements.resultPreview, elements.resultPlaceholder, "");
 setSingleResultLoading(false);
 setBulkResultLoading(false);
-setSingleSourceVisibility(false);
-setBulkSourceVisibility(false);
-setPromptVisibility(false);
-setMode("single");
+setVisible(elements.singleDownloadSection, false);
+setVisible(elements.bulkDownloadSection, false);
 renderBulkSources();
 renderBulkResults([]);
-setStatus("Choose an image and edit the prompt if needed.");
+setMode("bulk");
+setStatus("");

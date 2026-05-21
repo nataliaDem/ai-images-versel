@@ -11,55 +11,61 @@
             <header class="hero">
                 <p class="eyebrow">FOODSPACE</p>
                 <h1>Image editor</h1>
-                <p class="hero-copy">
-                    Upload an image, pick or edit a prompt, choose whether to
-                    preserve the original orientation, and see the result on
-                    the same page.
-                </p>
+                <div class="mode-switch" role="tablist" aria-label="Mode">
+                    <button
+                        id="singleModeButton"
+                        class="mode-button"
+                        type="button"
+                        data-mode="single"
+                    >
+                        Single
+                    </button>
+                    <button
+                        id="bulkModeButton"
+                        class="mode-button is-active"
+                        type="button"
+                        data-mode="bulk"
+                    >
+                        Bulk
+                    </button>
+                </div>
             </header>
 
             <main class="workspace">
                 <section class="panel controls-panel">
-                    <div class="mode-switch" role="tablist" aria-label="Mode">
-                        <button
-                            id="singleModeButton"
-                            class="mode-button is-active"
-                            type="button"
-                            data-mode="single"
-                        >
-                            Single
-                        </button>
-                        <button
-                            id="bulkModeButton"
-                            class="mode-button"
-                            type="button"
-                            data-mode="bulk"
-                        >
-                            Bulk
-                        </button>
+                    <div
+                        id="controlsLoadingOverlay"
+                        class="panel-loading-overlay is-hidden"
+                    >
+                        <div class="panel-loading-card">
+                            <div class="inline-loader-spinner" aria-hidden="true"></div>
+                            <div class="panel-loading-text">Loading</div>
+                        </div>
                     </div>
 
-                    <div id="singleControls" class="mode-panel">
-                        <div
-                            id="dropzone"
-                            class="dropzone"
-                            tabindex="0"
-                            role="button"
-                            aria-label="Upload image"
-                        >
-                            <input
-                                id="fileInput"
-                                class="sr-only"
-                                type="file"
-                                accept="image/png,image/jpeg"
-                            />
-                            <div class="dropzone-copy">
-                                <span class="dropzone-title">
-                                    Drag an image here
-                                </span>
-                                <span class="dropzone-subtitle">
-                                    or click to choose a file
-                                </span>
+                    <div id="singleControls" class="mode-panel is-hidden">
+                        <div id="singleDropzoneWrap" class="single-dropzone-wrap">
+                            <div
+                                id="dropzone"
+                                class="dropzone"
+                                tabindex="0"
+                                role="button"
+                                aria-label="Upload image"
+                            >
+                                <input
+                                    id="fileInput"
+                                    class="sr-only"
+                                    type="file"
+                                    accept="image/png,image/jpeg"
+                                />
+                                <div class="dropzone-copy">
+                                    <span class="dropzone-title">
+                                        Drag an image here
+                                    </span>
+                                    <span class="dropzone-subtitle">
+                                        or click to choose a file
+                                    </span>
+                                </div>
                             </div>
                         </div>
 
@@ -76,7 +82,16 @@
                             id="singleSourceSection"
                             class="inline-preview-section is-hidden"
                         >
-                            <div class="preview-heading">Source</div>
+                            <div class="preview-heading-row">
+                                <div class="preview-heading">Source</div>
+                                <button
+                                    id="singleResetButton"
+                                    class="prompt-toggle-button"
+                                    type="button"
+                                >
+                                    Start over
+                                </button>
+                            </div>
                             <div class="preview-frame preview-frame-compact">
                                 <img
                                     id="sourcePreview"
@@ -92,15 +107,25 @@
                         </div>
                     </div>
 
-                    <div id="bulkControls" class="mode-panel is-hidden">
-                        <div class="field-group">
+                    <div id="bulkControls" class="mode-panel">
+                        <div id="bakerySection" class="field-group is-hidden">
                             <label for="bakerySelect">Bakery</label>
-                            <select id="bakerySelect">
-                                <option value="">Choose a bakery</option>
+                            <select id="bakerySelect" disabled>
+                                <option value="">Loading bakeries...</option>
                             </select>
                         </div>
 
-                        <div class="field-group">
+                        <div
+                            id="bulkSelectionLoader"
+                            class="inline-loader is-hidden"
+                        >
+                            <div class="inline-loader-spinner" aria-hidden="true"></div>
+                            <div class="inline-loader-text">
+                                Loading categories and products
+                            </div>
+                        </div>
+
+                        <div id="categorySection" class="field-group is-hidden">
                             <label for="categorySelect">Category</label>
                             <select id="categorySelect" disabled>
                                 <option value="">Choose a category</option>
@@ -127,22 +152,40 @@
                         </div>
                     </div>
 
-                    <div class="style-grid">
-                        <div class="field-group style-group">
-                            <label for="wallSelect">Wall</label>
-                            <select id="wallSelect"></select>
-                        </div>
-                        <div class="field-group style-group">
-                            <label for="tableSelect">Table</label>
-                            <select id="tableSelect"></select>
-                        </div>
-                        <div class="field-group style-group">
-                            <label for="standSelect">Stand / plate</label>
-                            <select id="standSelect"></select>
-                        </div>
-                    </div>
+                    <section id="sceneSection" class="scene-section is-hidden">
+                        <div class="section-title">Scene</div>
 
-                    <div class="prompt-section">
+                        <div class="scene-grid">
+                            <div
+                                id="wallField"
+                                class="field-group style-group"
+                            >
+                                <label for="wallSelect">Wall</label>
+                                <select id="wallSelect">
+                                </select>
+                            </div>
+
+                            <div
+                                id="tableField"
+                                class="field-group style-group"
+                            >
+                                <label for="tableSelect">Table</label>
+                                <select id="tableSelect">
+                                </select>
+                            </div>
+
+                            <div
+                                id="standField"
+                                class="field-group style-group scene-grid-wide"
+                            >
+                                <label for="standSelect">Stand / plate</label>
+                                <select id="standSelect">
+                                </select>
+                            </div>
+                        </div>
+                    </section>
+
+                    <div id="promptSection" class="prompt-section is-hidden">
                         <div class="prompt-section-header">
                             <div class="prompt-title">Prompt</div>
                             <button
@@ -168,8 +211,12 @@
                         </div>
                     </div>
 
-                    <label class="toggle-row" for="preserveOrientation">
-                        <span>Preserve source image orientation</span>
+                    <label
+                        id="preserveSection"
+                        class="toggle-row is-hidden"
+                        for="preserveOrientation"
+                    >
+                        <span>Preserve source image orientation. If disabled, the output will be horizontal.</span>
                         <input
                             id="preserveOrientation"
                             type="checkbox"
@@ -177,17 +224,17 @@
                         />
                     </label>
 
-                    <div class="actions">
+                    <div id="actionsSection" class="actions is-hidden">
                         <button id="generateButton" class="primary-button">
-                            Generate
+                            Generate selected
                         </button>
                     </div>
 
-                    <p id="status" class="status-text">No file selected yet.</p>
+                    <p id="status" class="status-text"></p>
                 </section>
 
                 <section class="panel preview-panel">
-                    <div id="singlePreviewSection">
+                    <div id="singlePreviewSection" class="is-hidden">
                         <div class="preview-card">
                             <div class="preview-heading">Result</div>
                             <div class="preview-frame">
@@ -209,7 +256,10 @@
                                     <div class="loader-text">Generation in progress</div>
                                 </div>
                             </div>
-                            <div class="bulk-download-section">
+                            <div
+                                id="singleDownloadSection"
+                                class="bulk-download-section is-hidden"
+                            >
                                 <button
                                     id="saveButton"
                                     class="secondary-button preview-download-button"
@@ -224,27 +274,34 @@
                         </div>
                     </div>
 
-                    <div id="bulkPreviewSection" class="is-hidden">
+                    <div id="bulkPreviewSection">
                         <div class="preview-card">
                             <div class="preview-heading">Result</div>
-                            <div
-                                id="bulkResultLoader"
-                                class="preview-loader bulk-loader is-hidden"
-                            >
-                                <div class="loader-spinner" aria-hidden="true"></div>
-                                <div class="loader-text">Generation in progress</div>
-                            </div>
-                            <div
-                                id="bulkResultsGrid"
-                                class="bulk-results-grid empty-state"
-                            >
-                                Generated product images will appear here.
+                            <div class="preview-frame bulk-result-surface">
+                                <div
+                                    id="bulkResultsGrid"
+                                    class="bulk-results-grid empty-state"
+                                >
+                                    <div class="empty-state-copy">
+                                        Generated images will appear here after processing.
+                                    </div>
+                                </div>
+                                <div
+                                    id="bulkResultLoader"
+                                    class="preview-loader bulk-loader is-hidden"
+                                >
+                                    <div class="loader-spinner" aria-hidden="true"></div>
+                                    <div class="loader-text">Generation in progress</div>
+                                </div>
                             </div>
                             <div
                                 id="bulkErrors"
                                 class="bulk-errors is-hidden"
                             ></div>
-                            <div class="bulk-download-section">
+                            <div
+                                id="bulkDownloadSection"
+                                class="bulk-download-section is-hidden"
+                            >
                                 <button
                                     id="bulkDownloadAllButton"
                                     class="secondary-button preview-download-button bulk-download-all-button"
@@ -272,7 +329,20 @@
             >
                 Close
             </button>
-            <img id="lightboxImage" alt="Large generated image preview" />
+            <div class="lightbox-dialog">
+                <div class="lightbox-pane">
+                    <div class="lightbox-pane-title">Source</div>
+                    <div class="lightbox-pane-frame">
+                        <img id="lightboxSourceImage" alt="Large source image preview" />
+                    </div>
+                </div>
+                <div class="lightbox-pane">
+                    <div class="lightbox-pane-title">Result</div>
+                    <div class="lightbox-pane-frame">
+                        <img id="lightboxImage" alt="Large generated image preview" />
+                    </div>
+                </div>
+            </div>
         </div>
 
         <script src="/app.js"></script>

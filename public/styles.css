@@ -834,7 +834,7 @@ button:disabled {
 #bulkSourcesGrid {
     grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 6px;
-    max-height: 240px;
+    max-height: 320px;
 }
 
 #bulkResultsGrid {
@@ -861,13 +861,13 @@ button:disabled {
 .bulk-source-card {
     position: relative;
     display: grid;
-    grid-template-rows: auto auto;
-    gap: 4px;
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 3px;
     padding: 4px;
     border: 1px solid var(--line-soft);
     border-radius: 10px;
     background: #fff;
-    min-height: 0;
+    min-height: 66px;
 }
 
 .bulk-result-image-button {
@@ -879,7 +879,7 @@ button:disabled {
 
 .bulk-result-thumb {
     display: grid;
-    gap: 6px;
+    gap: 0;
 }
 
 .bulk-result-thumb img {
@@ -905,6 +905,7 @@ button:disabled {
 }
 
 #bulkSourcesGrid .bulk-result-thumb img {
+    display: block;
     border-radius: 6px;
     aspect-ratio: 1 / 1;
     max-height: none;
@@ -921,6 +922,7 @@ button:disabled {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    align-self: end;
 }
 
 #bulkResultsGrid .bulk-result-card {

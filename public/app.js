@@ -49,6 +49,9 @@ const elements = {
     bulkErrors: document.getElementById("bulkErrors"),
     status: document.getElementById("status"),
     lightbox: document.getElementById("lightbox"),
+    lightboxDialog: document.getElementById("lightboxDialog"),
+    lightboxSourcePane: document.getElementById("lightboxSourcePane"),
+    lightboxResultPane: document.getElementById("lightboxResultPane"),
     lightboxSourceImage: document.getElementById("lightboxSourceImage"),
     lightboxImage: document.getElementById("lightboxImage"),
     lightboxClose: document.getElementById("lightboxClose"),
@@ -285,6 +288,19 @@ function scrollToWorkspaceTop() {
     });
 }
 
+function scrollToResultSection() {
+    const isMobile = window.matchMedia("(max-width: 980px)").matches;
+    const target = isMobile
+        ? document.querySelector(".preview-panel")
+        : document.querySelector(".workspace");
+    const top = target?.getBoundingClientRect().top ?? 0;
+
+    window.scrollTo({
+        top: window.scrollY + top - 16,
+        behavior: "smooth",
+    });
+}
+
 function updatePreview(preview, placeholder, src) {
     if (src) {
         preview.src = src;
@@ -430,17 +446,24 @@ function openLightbox({ sourceSrc = "", resultSrc = "" }) {
         return;
     }
 
-    if (sourceSrc) {
+    const hasSource = Boolean(sourceSrc);
+    const hasResult = Boolean(resultSrc);
+
+    if (hasSource) {
         elements.lightboxSourceImage.src = sourceSrc;
     } else {
         elements.lightboxSourceImage.removeAttribute("src");
     }
 
-    if (resultSrc) {
+    if (hasResult) {
         elements.lightboxImage.src = resultSrc;
     } else {
         elements.lightboxImage.removeAttribute("src");
     }
+
+    setVisible(elements.lightboxSourcePane, hasSource);
+    setVisible(elements.lightboxResultPane, hasResult);
+    elements.lightboxDialog.classList.toggle("single-pane", hasSource !== hasResult);
 
     elements.lightbox.classList.remove("is-hidden");
     elements.lightbox.setAttribute("aria-hidden", "false");
@@ -451,6 +474,9 @@ function closeLightbox() {
     elements.lightbox.setAttribute("aria-hidden", "true");
     elements.lightboxSourceImage.removeAttribute("src");
     elements.lightboxImage.removeAttribute("src");
+    setVisible(elements.lightboxSourcePane, true);
+    setVisible(elements.lightboxResultPane, true);
+    elements.lightboxDialog.classList.remove("single-pane");
 }
 
 function fillSelect(select, options, placeholder) {
@@ -934,7 +960,7 @@ async function generateSingle() {
     elements.generateButton.disabled = true;
     elements.saveButton.disabled = true;
     setSingleResultLoading(true);
-    scrollToWorkspaceTop();
+    scrollToResultSection();
     setStatus("");
 
     try {
@@ -994,7 +1020,7 @@ async function generateBulk() {
     elements.generateButton.disabled = true;
     setBulkResultLoading(true);
     renderBulkResults([]);
-    scrollToWorkspaceTop();
+    scrollToResultSection();
     setStatus("");
 
     try {
@@ -1183,7 +1209,6 @@ elements.sourcePreview.addEventListener("click", () => {
     if (hasSingleSource()) {
         openLightbox({
             sourceSrc: state.sourceImageDataUrl || state.sourceImageUrl,
-            resultSrc: state.sourceImageDataUrl || state.sourceImageUrl,
         });
     }
 });
@@ -1194,7 +1219,6 @@ elements.bulkSourcesGrid.addEventListener("click", (event) => {
     if (imageButton) {
         openLightbox({
             sourceSrc: imageButton.dataset.imageSrc,
-            resultSrc: imageButton.dataset.imageSrc,
         });
     }
 });

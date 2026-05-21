@@ -795,6 +795,11 @@ button:disabled {
     gap: 18px;
 }
 
+.lightbox-dialog.single-pane {
+    grid-template-columns: minmax(0, 1fr);
+    width: min(760px, 100%);
+}
+
 .lightbox-pane {
     display: grid;
     gap: 10px;

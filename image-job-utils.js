@@ -107,6 +107,57 @@ function getJpegDimensions(buffer) {
     throw new Error("Unsupported JPEG format: could not read dimensions.");
 }
 
+function getGifDimensions(buffer) {
+    if (buffer.length < 10) {
+        throw new Error("GIF file is too small to read dimensions.");
+    }
+
+    return {
+        width: buffer.readUInt16LE(6),
+        height: buffer.readUInt16LE(8),
+    };
+}
+
+function getWebpDimensions(buffer) {
+    if (buffer.length < 30) {
+        throw new Error("WEBP file is too small to read dimensions.");
+    }
+
+    if (buffer.toString("ascii", 0, 4) !== "RIFF" || buffer.toString("ascii", 8, 12) !== "WEBP") {
+        throw new Error("Invalid WEBP file header.");
+    }
+
+    const chunkType = buffer.toString("ascii", 12, 16);
+
+    if (chunkType === "VP8X") {
+        return {
+            width: 1 + buffer.readUIntLE(24, 3),
+            height: 1 + buffer.readUIntLE(27, 3),
+        };
+    }
+
+    if (chunkType === "VP8L") {
+        const byte1 = buffer[21];
+        const byte2 = buffer[22];
+        const byte3 = buffer[23];
+        const byte4 = buffer[24];
+
+        return {
+            width: 1 + (((byte2 & 0x3f) << 8) | byte1),
+            height: 1 + (((byte4 & 0x0f) << 10) | (byte3 << 2) | ((byte2 & 0xc0) >> 6)),
+        };
+    }
+
+    if (chunkType === "VP8 ") {
+        return {
+            width: buffer.readUInt16LE(26) & 0x3fff,
+            height: buffer.readUInt16LE(28) & 0x3fff,
+        };
+    }
+
+    throw new Error("Unsupported WEBP chunk type for dimension detection.");
+}
+
 function getImageDimensions(buffer, contentType) {
     if (contentType.includes("png")) {
         return getPngDimensions(buffer);
@@ -116,11 +167,23 @@ function getImageDimensions(buffer, contentType) {
         return getJpegDimensions(buffer);
     }
 
+    if (contentType.includes("webp")) {
+        return getWebpDimensions(buffer);
+    }
+
+    if (contentType.includes("gif")) {
+        return getGifDimensions(buffer);
+    }
+
     throw new Error(`Unsupported image type for dimension detection: ${contentType}`);
 }
 
-function getSizeForOrientation(dimensions, sizes, preserveOrientation) {
+function getSizeForOrientation(dimensions, sizes, preserveOrientation, targetOrientation) {
     if (!preserveOrientation) {
+        if (targetOrientation && sizes[targetOrientation]) {
+            return sizes[targetOrientation];
+        }
+
         return sizes.horizontal;
     }
 

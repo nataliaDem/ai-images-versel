@@ -40,10 +40,15 @@ const elements = {
     promptEditor: document.getElementById("promptEditor"),
     preserveSection: document.getElementById("preserveSection"),
     preserveOrientation: document.getElementById("preserveOrientation"),
+    orientationSection: document.getElementById("orientationSection"),
+    orientationHorizontalButton: document.getElementById("orientationHorizontalButton"),
+    orientationSquareButton: document.getElementById("orientationSquareButton"),
+    orientationVerticalButton: document.getElementById("orientationVerticalButton"),
     actionsSection: document.getElementById("actionsSection"),
     generateButton: document.getElementById("generateButton"),
     costEstimate: document.getElementById("costEstimate"),
     saveButton: document.getElementById("saveButton"),
+    singleUploadS3Button: document.getElementById("singleUploadS3Button"),
     singleDownloadSection: document.getElementById("singleDownloadSection"),
     sourcePreview: document.getElementById("sourcePreview"),
     sourcePlaceholder: document.getElementById("sourcePlaceholder"),
@@ -55,6 +60,7 @@ const elements = {
     bulkResultsGrid: document.getElementById("bulkResultsGrid"),
     bulkResultLoader: document.getElementById("bulkResultLoader"),
     bulkDownloadAllButton: document.getElementById("bulkDownloadAllButton"),
+    bulkUploadS3Button: document.getElementById("bulkUploadS3Button"),
     bulkDownloadSection: document.getElementById("bulkDownloadSection"),
     bulkErrors: document.getElementById("bulkErrors"),
     status: document.getElementById("status"),
@@ -249,12 +255,12 @@ const SCENE_PRESETS = [
         image: "/scene-presets/clean-white-marble.jpg",
     },
     {
-        id: "warm-natural-wood",
-        name: "Fresh Mint Wood",
-        wall: "mint",
+        id: "warm-white-wood",
+        name: "Warm White Wood",
+        wall: "warm-white-stone",
         table: "light-wood",
         stand: "round-wooden-tray",
-        image: "/scene-presets/warm-natural-wood.jpg",
+        image: "/scene-presets/warm-white-wood.png",
     },
     {
         id: "cool-stone-minimal",
@@ -301,6 +307,7 @@ const state = {
     bakeryDropdownOpen: false,
     selectedScenePresetId: SCENE_PRESETS[0].id,
     sceneCustomizeOpen: false,
+    targetOrientation: "horizontal",
 };
 
 const STORAGE_KEYS = {
@@ -321,10 +328,18 @@ const IMAGE_PRICING = {
     horizontal: 0.05,
     vertical: 0.05,
 };
+const OPENAI_SUPPORTED_IMAGE_TYPES = new Set([
+    "image/png",
+    "image/jpeg",
+    "image/jpg",
+    "image/webp",
+    "image/gif",
+]);
 
 function setStatus(message = "", isError = false) {
     elements.status.textContent = message;
-    elements.status.style.color = isError ? "#a13d29" : "";
+    elements.status.classList.toggle("has-message", Boolean(message));
+    elements.status.classList.toggle("is-error", Boolean(message) && isError);
 }
 
 function setVisible(element, isVisible) {
@@ -349,7 +364,7 @@ function getOrientationFromDimensions(width, height) {
 
 function getSingleImageOrientation() {
     if (!elements.preserveOrientation.checked) {
-        return "horizontal";
+        return state.targetOrientation;
     }
 
     return getOrientationFromDimensions(
@@ -360,7 +375,7 @@ function getSingleImageOrientation() {
 
 function getBulkImageOrientation(productId) {
     if (!elements.preserveOrientation.checked) {
-        return "horizontal";
+        return state.targetOrientation;
     }
 
     const image = elements.bulkSourcesGrid.querySelector(
@@ -404,6 +419,19 @@ function updateGenerateButtonLabel() {
     elements.costEstimate.textContent =
         selectedCount > 0 ? `Cost ~ ${formatUsdAmount(amount)}` : "";
     setVisible(elements.costEstimate, selectedCount > 0);
+}
+
+function syncOrientationButtons() {
+    [
+        elements.orientationHorizontalButton,
+        elements.orientationSquareButton,
+        elements.orientationVerticalButton,
+    ].forEach((button) => {
+        button.classList.toggle(
+            "is-active",
+            button.dataset.orientation === state.targetOrientation,
+        );
+    });
 }
 
 function scheduleCostEstimateRefresh() {
@@ -1061,6 +1089,7 @@ function resetSceneSelections() {
 function resetSingleResult() {
     state.resultImageDataUrl = "";
     updatePreview(elements.resultPreview, elements.resultPlaceholder, "");
+    elements.singleUploadS3Button.disabled = true;
     setVisible(elements.singleDownloadSection, false);
 }
 
@@ -1075,6 +1104,12 @@ function resetSingleSource() {
     resetSceneSelections();
     updateStepVisibility();
     setStatus("");
+}
+
+function setTargetOrientation(orientation) {
+    state.targetOrientation = orientation;
+    syncOrientationButtons();
+    updateStepVisibility();
 }
 
 function updateStepVisibility() {
@@ -1104,6 +1139,10 @@ function updateStepVisibility() {
     setVisible(elements.standField, sourceReady);
     setVisible(elements.promptSection, sourceReady && sceneReady);
     setVisible(elements.preserveSection, sourceReady && sceneReady);
+    setVisible(
+        elements.orientationSection,
+        sourceReady && sceneReady && !elements.preserveOrientation.checked,
+    );
     setVisible(elements.actionsSection, sourceReady && sceneReady);
 
     updateGenerateButtonLabel();
@@ -1136,20 +1175,61 @@ async function readFileAsDataUrl(file) {
     });
 }
 
+function isOpenAiSupportedImageType(file) {
+    return OPENAI_SUPPORTED_IMAGE_TYPES.has(String(file?.type || "").toLowerCase());
+}
+
+async function convertUnsupportedImageToPng(file) {
+    const objectUrl = URL.createObjectURL(file);
+
+    try {
+        const image = await new Promise((resolve, reject) => {
+            const nextImage = new Image();
+            nextImage.onload = () => resolve(nextImage);
+            nextImage.onerror = () =>
+                reject(
+                    new Error(
+                        "This image format could not be converted in the browser. Please upload PNG, JPEG, WEBP, or GIF.",
+                    ),
+                );
+            nextImage.src = objectUrl;
+        });
+
+        const canvas = document.createElement("canvas");
+        canvas.width = image.naturalWidth || image.width;
+        canvas.height = image.naturalHeight || image.height;
+
+        const context = canvas.getContext("2d");
+
+        if (!context) {
+            throw new Error("Could not prepare the image for upload.");
+        }
+
+        context.drawImage(image, 0, 0);
+        return canvas.toDataURL("image/png");
+    } finally {
+        URL.revokeObjectURL(objectUrl);
+    }
+}
+
 async function handleFile(file) {
     if (!file) {
         return;
     }
 
     if (!file.type.startsWith("image/")) {
-        setStatus("Please upload a PNG or JPEG image.", true);
+        setStatus("Please upload an image file.", true);
         return;
     }
 
-    const dataUrl = await readFileAsDataUrl(file);
+    const dataUrl = isOpenAiSupportedImageType(file)
+        ? await readFileAsDataUrl(file)
+        : await convertUnsupportedImageToPng(file);
     state.sourceImageDataUrl = dataUrl;
     state.sourceImageUrl = "";
-    state.uploadedFileName = file.name;
+    state.uploadedFileName = isOpenAiSupportedImageType(file)
+        ? file.name
+        : `${file.name.replace(/\.[^.]+$/, "") || "converted-image"}.png`;
     elements.imageUrlInput.value = "";
     resetSingleResult();
     updatePreview(elements.sourcePreview, elements.sourcePlaceholder, dataUrl);
@@ -1332,6 +1412,7 @@ function renderBulkResults(results) {
     const errors = results.filter((item) => item.error);
 
     elements.bulkDownloadAllButton.disabled = successes.length === 0;
+    elements.bulkUploadS3Button.disabled = successes.length === 0;
     setVisible(elements.bulkDownloadSection, successes.length > 0);
 
     if (successes.length === 0) {
@@ -1466,6 +1547,7 @@ async function generateSingle() {
                 imageUrl: state.sourceImageUrl,
                 prompt: elements.promptEditor.value,
                 preserveOrientation: elements.preserveOrientation.checked,
+                targetOrientation: state.targetOrientation,
             }),
         });
 
@@ -1479,6 +1561,7 @@ async function generateSingle() {
         updatePreview(elements.resultPreview, elements.resultPlaceholder, state.resultImageDataUrl);
         await storeSingleGeneration(state.resultImageDataUrl);
         elements.saveButton.disabled = false;
+        elements.singleUploadS3Button.disabled = false;
         setVisible(elements.singleDownloadSection, true);
         setStatus("");
     } catch (error) {
@@ -1529,6 +1612,7 @@ async function generateBulk() {
                 })),
                 prompt: elements.promptEditor.value,
                 preserveOrientation: elements.preserveOrientation.checked,
+                targetOrientation: state.targetOrientation,
             }),
         });
 
@@ -1738,7 +1822,16 @@ elements.bulkSourcesGrid.addEventListener("change", (event) => {
 elements.wallSelect.addEventListener("change", updatePromptFromSelections);
 elements.tableSelect.addEventListener("change", updatePromptFromSelections);
 elements.standSelect.addEventListener("change", updatePromptFromSelections);
-elements.preserveOrientation.addEventListener("change", updateGenerateButtonLabel);
+[
+    elements.orientationHorizontalButton,
+    elements.orientationSquareButton,
+    elements.orientationVerticalButton,
+].forEach((button) => {
+    button.addEventListener("click", () => {
+        setTargetOrientation(button.dataset.orientation);
+    });
+});
+elements.preserveOrientation.addEventListener("change", updateStepVisibility);
 elements.preserveOrientation.addEventListener("click", scheduleCostEstimateRefresh);
 elements.preserveSection.addEventListener("click", scheduleCostEstimateRefresh);
 elements.toggleSceneCustomizeButton.addEventListener("click", () => {
@@ -1852,6 +1945,86 @@ elements.bulkDownloadAllButton.addEventListener("click", async () => {
     }
 });
 
+elements.singleUploadS3Button.addEventListener("click", async () => {
+    if (!state.resultImageDataUrl) {
+        setStatus("There is nothing to upload yet.", true);
+        return;
+    }
+
+    elements.singleUploadS3Button.disabled = true;
+
+    try {
+        const response = await fetch("/api/upload-single-s3", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                imageDataUrl: state.resultImageDataUrl,
+                filenameBase: state.uploadedFileName,
+            }),
+        });
+
+        const payload = await response.json();
+
+        if (!response.ok) {
+            throw new Error(payload.error || "Could not upload the single image to S3.");
+        }
+
+        setStatus(`Uploaded to S3: ${payload.uploaded.key}`);
+    } catch (error) {
+        setStatus(error.message, true);
+    } finally {
+        elements.singleUploadS3Button.disabled = false;
+    }
+});
+
+elements.bulkUploadS3Button.addEventListener("click", async () => {
+    const successes = state.bulkResults.filter((item) => item.imageDataUrl);
+
+    if (!elements.bakerySelect.value) {
+        setStatus("Bakery is required for bulk S3 upload.", true);
+        return;
+    }
+
+    if (successes.length === 0) {
+        setStatus("There are no generated results to upload yet.", true);
+        return;
+    }
+
+    elements.bulkUploadS3Button.disabled = true;
+
+    try {
+        const response = await fetch("/api/upload-bulk-s3", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                bakeryId: elements.bakerySelect.value,
+                items: successes.map((item) => ({
+                    id: item.id,
+                    name: item.name,
+                    imageDataUrl: item.imageDataUrl,
+                })),
+            }),
+        });
+
+        const payload = await response.json();
+
+        if (!response.ok) {
+            throw new Error(payload.error || "Could not upload the bulk images to S3.");
+        }
+
+        setStatus(`Uploaded ${payload.uploads.length} image(s) to S3.`);
+    } catch (error) {
+        setStatus(error.message, true);
+    } finally {
+        elements.bulkUploadS3Button.disabled =
+            state.bulkResults.filter((item) => item.imageDataUrl).length === 0;
+    }
+});
+
 elements.lightboxClose.addEventListener("click", closeLightbox);
 elements.lightbox.addEventListener("click", (event) => {
     if (event.target === elements.lightbox) {
@@ -1889,6 +2062,7 @@ fillSelect(elements.tableSelect, PROMPT_OPTIONS.tables);
 fillSelect(elements.standSelect, PROMPT_OPTIONS.stands);
 renderScenePresets();
 updateSceneCustomizeVisibility();
+syncOrientationButtons();
 resetSceneSelections();
 updatePreview(elements.sourcePreview, elements.sourcePlaceholder, "");
 updatePreview(elements.resultPreview, elements.resultPlaceholder, "");
@@ -1896,6 +2070,8 @@ setSingleResultLoading(false);
 setBulkResultLoading(false);
 setVisible(elements.singleDownloadSection, false);
 setVisible(elements.bulkDownloadSection, false);
+elements.singleUploadS3Button.disabled = true;
+elements.bulkUploadS3Button.disabled = true;
 renderBulkSources();
 renderBulkResults([]);
 updateSelectAllProductsLabel();

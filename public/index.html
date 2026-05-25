@@ -56,7 +56,7 @@
                                     id="fileInput"
                                     class="sr-only"
                                     type="file"
-                                    accept="image/png,image/jpeg"
+                                    accept="image/*"
                                 />
                                 <div class="dropzone-copy">
                                     <span class="dropzone-title">
@@ -256,13 +256,42 @@
                         class="toggle-row is-hidden"
                         for="preserveOrientation"
                     >
-                        <span>Preserve source image orientation. If disabled, the output will be horizontal.</span>
+                        <span>Preserve source image orientation.</span>
                         <input
                             id="preserveOrientation"
                             type="checkbox"
                             checked
                         />
                     </label>
+                    <div id="orientationSection" class="orientation-section is-hidden">
+                        <div class="orientation-title">Result orientation</div>
+                        <div class="orientation-segmented" role="group" aria-label="Result orientation">
+                            <button
+                                id="orientationHorizontalButton"
+                                class="orientation-button is-active"
+                                type="button"
+                                data-orientation="horizontal"
+                            >
+                                Horizontal
+                            </button>
+                            <button
+                                id="orientationSquareButton"
+                                class="orientation-button"
+                                type="button"
+                                data-orientation="square"
+                            >
+                                Square
+                            </button>
+                            <button
+                                id="orientationVerticalButton"
+                                class="orientation-button"
+                                type="button"
+                                data-orientation="vertical"
+                            >
+                                Vertical
+                            </button>
+                        </div>
+                    </div>
 
                     <div id="actionsSection" class="actions is-hidden">
                         <button id="generateButton" class="primary-button">
@@ -301,13 +330,23 @@
                                 id="singleDownloadSection"
                                 class="bulk-download-section is-hidden"
                             >
-                                <button
-                                    id="saveButton"
-                                    class="secondary-button preview-download-button"
-                                    disabled
-                                >
-                                    Download result
-                                </button>
+                                <div class="preview-action-row">
+                                    <button
+                                        id="saveButton"
+                                        class="secondary-button preview-download-button"
+                                        disabled
+                                    >
+                                        Download result
+                                    </button>
+                                    <button
+                                        id="singleUploadS3Button"
+                                        class="secondary-button preview-download-button"
+                                        type="button"
+                                        disabled
+                                    >
+                                        Upload to S3
+                                    </button>
+                                </div>
                                 <p class="bulk-download-note">
                                     Be sure to save the generated image so you do not lose it.
                                 </p>
@@ -343,14 +382,24 @@
                                 id="bulkDownloadSection"
                                 class="bulk-download-section is-hidden"
                             >
-                                <button
-                                    id="bulkDownloadAllButton"
-                                    class="secondary-button preview-download-button bulk-download-all-button"
-                                    type="button"
-                                    disabled
-                                >
-                                    Download all
-                                </button>
+                                <div class="preview-action-row">
+                                    <button
+                                        id="bulkDownloadAllButton"
+                                        class="secondary-button preview-download-button bulk-download-all-button"
+                                        type="button"
+                                        disabled
+                                    >
+                                        Download all
+                                    </button>
+                                    <button
+                                        id="bulkUploadS3Button"
+                                        class="secondary-button preview-download-button bulk-download-all-button"
+                                        type="button"
+                                        disabled
+                                    >
+                                        Upload all to S3
+                                    </button>
+                                </div>
                                 <p class="bulk-download-note">
                                     Be sure to save the generated images so you do not lose them.
                                 </p>

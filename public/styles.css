@@ -578,7 +578,7 @@ textarea {
     justify-content: space-between;
     gap: 16px;
     margin-top: 16px;
-    padding: 8px 2px 0;
+    padding: 8px 0;
     border: 0;
     border-radius: 0;
 }
@@ -587,6 +587,52 @@ textarea {
     font-weight: 500;
     line-height: 1.35;
     color: var(--muted);
+}
+
+.orientation-section {
+    margin-top: 10px;
+}
+
+.orientation-title {
+    margin-bottom: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+}
+
+.orientation-segmented {
+    display: inline-flex;
+    width: 100%;
+    gap: 6px;
+    padding: 4px;
+    border: 1px solid var(--line-soft);
+    border-radius: 999px;
+    background: #fff;
+}
+
+.orientation-button {
+    flex: 1 1 0;
+    border: 0;
+    border-radius: 999px;
+    padding: 8px 12px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition:
+        background-color 160ms ease,
+        color 160ms ease,
+        transform 160ms ease;
+}
+
+.orientation-button:hover {
+    transform: translateY(-1px);
+}
+
+.orientation-button.is-active {
+    background: rgba(0, 218, 199, 0.12);
+    color: var(--ink);
 }
 
 .products-check-all {
@@ -706,6 +752,21 @@ button:disabled {
 
 .status-text {
     display: none;
+    margin: 10px 2px 0;
+    font-size: 13px;
+    line-height: 1.35;
+}
+
+.status-text.has-message {
+    display: block;
+}
+
+.status-text.is-error {
+    color: #a13d29;
+}
+
+.status-text:not(.is-error) {
+    color: var(--muted);
 }
 
 .cost-estimate {
@@ -961,6 +1022,12 @@ button:disabled {
 
 .preview-download-button {
     align-self: flex-start;
+}
+
+.preview-action-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
 }
 
 .bulk-download-all-button {

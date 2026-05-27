@@ -60,8 +60,17 @@ input {
     padding: 24px 0 40px;
 }
 
+body.embed-mode .page-shell {
+    width: min(1120px, calc(100% - 20px));
+    padding-top: 12px;
+}
+
 .hero {
     padding: 18px 12px 0;
+}
+
+body.embed-mode .hero {
+    display: none;
 }
 
 .eyebrow {
@@ -713,7 +722,8 @@ textarea {
 }
 
 .primary-button,
-.secondary-button {
+.secondary-button,
+.outline-button {
     border: 0;
     border-radius: 999px;
     padding: 14px 18px;
@@ -739,8 +749,44 @@ textarea {
     box-shadow: 0 12px 24px rgba(255, 51, 153, 0.18);
 }
 
+.outline-button {
+    background: #fff;
+    color: var(--accent-dark);
+    font-weight: 700;
+    border: 1px solid rgba(255, 51, 153, 0.28);
+    box-shadow: none;
+}
+
+.secondary-button .button-loading,
+.primary-button .button-loading,
+.outline-button .button-loading {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.secondary-button .button-label.is-hidden,
+.secondary-button .button-loading.is-hidden,
+.outline-button .button-label.is-hidden,
+.outline-button .button-loading.is-hidden,
+.primary-button .button-label.is-hidden,
+.primary-button .button-loading.is-hidden {
+    display: none;
+}
+
+.button-spinner {
+    width: 14px;
+    height: 14px;
+    border-radius: 999px;
+    border: 2px solid rgba(255, 255, 255, 0.32);
+    border-top-color: #fff;
+    animation: spin 0.8s linear infinite;
+    flex: 0 0 auto;
+}
+
 .primary-button:hover,
-.secondary-button:hover {
+.secondary-button:hover,
+.outline-button:hover {
     transform: translateY(-1px);
 }
 
@@ -774,6 +820,7 @@ button:disabled {
     color: var(--muted);
     font-size: 13px;
     line-height: 1.35;
+    display: none !important;
 }
 
 .preview-card {
@@ -791,14 +838,43 @@ button:disabled {
     border: 1px solid rgba(0, 218, 199, 0.2);
 }
 
+#singlePreviewSection .preview-card {
+    position: relative;
+}
+
+#singlePreviewSection .preview-frame {
+    min-height: 280px;
+    height: clamp(280px, 48vh, 420px);
+}
+
 .preview-frame-compact {
     min-height: 160px;
+}
+
+body.embed-mode .preview-frame-compact {
+    min-height: 96px;
+    max-height: 96px;
+}
+
+body.embed-mode #singlePreviewSection .preview-frame {
+    min-height: 240px;
+    height: clamp(240px, 38vh, 320px);
+}
+
+body.embed-mode .preview-frame-compact img {
+    padding: 10px;
+    box-sizing: border-box;
 }
 
 .preview-frame img {
     width: 100%;
     height: 100%;
     object-fit: contain;
+}
+
+#resultPreview {
+    padding: 12px;
+    box-sizing: border-box;
 }
 
 #resultPreview:not(.is-empty) {
@@ -1030,6 +1106,28 @@ button:disabled {
     gap: 10px;
 }
 
+.preview-action-row .primary-button,
+.preview-action-row .secondary-button,
+.preview-action-row .outline-button {
+    width: auto;
+}
+
+#singleUploadS3Button {
+    min-width: 148px;
+    justify-content: center;
+    background: var(--accent);
+    box-shadow: 0 12px 24px rgba(255, 51, 153, 0.18);
+}
+
+body.embed-mode #singleUploadS3Button {
+    position: static;
+    min-width: 220px;
+}
+
+body.embed-mode #singleDownloadSection .bulk-download-note {
+    display: none;
+}
+
 .bulk-download-all-button {
     padding: 14px 18px;
     font-size: 14px;
@@ -1040,6 +1138,43 @@ button:disabled {
     color: var(--muted);
     font-size: 13px;
     line-height: 1.4;
+}
+
+.upload-status {
+    display: none !important;
+}
+
+.toast-container {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    z-index: 40;
+    display: grid;
+    gap: 10px;
+    pointer-events: none;
+}
+
+.toast {
+    min-width: 220px;
+    max-width: min(360px, calc(100vw - 36px));
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: rgba(34, 22, 31, 0.92);
+    color: #fff;
+    font-size: 13px;
+    line-height: 1.35;
+    box-shadow: 0 14px 34px rgba(34, 22, 31, 0.22);
+    transform: translateY(8px);
+    opacity: 0;
+    animation: toast-in 180ms ease forwards;
+}
+
+.toast.is-error {
+    background: rgba(161, 61, 41, 0.96);
+}
+
+.toast.is-success {
+    background: rgba(0, 160, 120, 0.96);
 }
 
 .preview-heading-row {
@@ -1126,6 +1261,18 @@ button:disabled {
 
     to {
         transform: rotate(360deg);
+    }
+}
+
+@keyframes toast-in {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
     }
 }
 

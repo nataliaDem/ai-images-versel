@@ -14,6 +14,7 @@ module.exports = async (req, res) => {
         const uploaded = await uploadSingleResultToS3({
             imageDataUrl: body.imageDataUrl,
             filenameBase: body.filenameBase,
+            bakeryId: body.bakeryId,
         });
 
         return sendJson(res, 200, { uploaded });

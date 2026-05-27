@@ -8,10 +8,10 @@
     </head>
     <body>
         <div class="page-shell">
-            <header class="hero">
-                <p class="eyebrow">FOODSPACE</p>
-                <h1>Image editor</h1>
-                <div class="mode-switch" role="tablist" aria-label="Mode">
+            <header id="hero" class="hero">
+                <p id="heroEyebrow" class="eyebrow">FOODSPACE</p>
+                <h1 id="heroTitle">Image editor</h1>
+                <div id="modeSwitch" class="mode-switch" role="tablist" aria-label="Mode">
                     <button
                         id="singleModeButton"
                         class="mode-button"
@@ -333,23 +333,28 @@
                                 <div class="preview-action-row">
                                     <button
                                         id="saveButton"
-                                        class="secondary-button preview-download-button"
+                                        class="outline-button preview-download-button"
                                         disabled
                                     >
                                         Download result
                                     </button>
                                     <button
                                         id="singleUploadS3Button"
-                                        class="secondary-button preview-download-button"
+                                        class="primary-button preview-download-button"
                                         type="button"
                                         disabled
                                     >
-                                        Upload to S3
+                                        <span id="singleUploadButtonLabel" class="button-label">Upload to gallery</span>
+                                        <span class="button-loading is-hidden">
+                                            <span class="button-spinner" aria-hidden="true"></span>
+                                            <span id="singleUploadButtonText">Uploading...</span>
+                                        </span>
                                     </button>
                                 </div>
                                 <p class="bulk-download-note">
                                     Be sure to save the generated image so you do not lose it.
                                 </p>
+                                <p id="singleUploadStatus" class="upload-status is-hidden"></p>
                             </div>
                         </div>
                     </div>
@@ -393,16 +398,21 @@
                                     </button>
                                     <button
                                         id="bulkUploadS3Button"
-                                        class="secondary-button preview-download-button bulk-download-all-button"
+                                        class="primary-button preview-download-button bulk-download-all-button"
                                         type="button"
                                         disabled
                                     >
-                                        Upload all to S3
+                                        <span class="button-label">Upload all to gallery</span>
+                                        <span class="button-loading is-hidden">
+                                            <span class="button-spinner" aria-hidden="true"></span>
+                                            <span id="bulkUploadButtonText">Uploading...</span>
+                                        </span>
                                     </button>
                                 </div>
                                 <p class="bulk-download-note">
                                     Be sure to save the generated images so you do not lose them.
                                 </p>
+                                <p id="bulkUploadStatus" class="upload-status is-hidden"></p>
                             </div>
                         </div>
                     </div>
@@ -434,6 +444,8 @@
                 </div>
             </div>
         </div>
+
+        <div id="toastContainer" class="toast-container" aria-live="polite"></div>
 
         <script src="/app.js"></script>
     </body>

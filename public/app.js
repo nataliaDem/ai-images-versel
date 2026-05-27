@@ -1,4 +1,5 @@
 const elements = {
+    modeSwitch: document.getElementById("modeSwitch"),
     singleModeButton: document.getElementById("singleModeButton"),
     bulkModeButton: document.getElementById("bulkModeButton"),
     singleControls: document.getElementById("singleControls"),
@@ -49,6 +50,9 @@ const elements = {
     costEstimate: document.getElementById("costEstimate"),
     saveButton: document.getElementById("saveButton"),
     singleUploadS3Button: document.getElementById("singleUploadS3Button"),
+    singleUploadButtonLabel: document.getElementById("singleUploadButtonLabel"),
+    singleUploadButtonText: document.getElementById("singleUploadButtonText"),
+    singleUploadStatus: document.getElementById("singleUploadStatus"),
     singleDownloadSection: document.getElementById("singleDownloadSection"),
     sourcePreview: document.getElementById("sourcePreview"),
     sourcePlaceholder: document.getElementById("sourcePlaceholder"),
@@ -61,9 +65,12 @@ const elements = {
     bulkResultLoader: document.getElementById("bulkResultLoader"),
     bulkDownloadAllButton: document.getElementById("bulkDownloadAllButton"),
     bulkUploadS3Button: document.getElementById("bulkUploadS3Button"),
+    bulkUploadButtonText: document.getElementById("bulkUploadButtonText"),
+    bulkUploadStatus: document.getElementById("bulkUploadStatus"),
     bulkDownloadSection: document.getElementById("bulkDownloadSection"),
     bulkErrors: document.getElementById("bulkErrors"),
     status: document.getElementById("status"),
+    toastContainer: document.getElementById("toastContainer"),
     lightbox: document.getElementById("lightbox"),
     lightboxDialog: document.getElementById("lightboxDialog"),
     lightboxSourcePane: document.getElementById("lightboxSourcePane"),
@@ -288,8 +295,21 @@ const SCENE_PRESETS = [
     },
 ];
 
+const EMBED_CONFIG = (() => {
+    const params = new URLSearchParams(window.location.search);
+    return {
+        bakeryId: params.get("bakery_id")?.trim() || "",
+        imageUrl: params.get("image_url")?.trim() || "",
+        parentOrigin: params.get("parent_origin")?.trim() || "*",
+    };
+})();
+
+if (EMBED_CONFIG.imageUrl) {
+    document.body.classList.add("embed-mode");
+}
+
 const state = {
-    mode: "bulk",
+    mode: EMBED_CONFIG.imageUrl ? "single" : "bulk",
     sourceImageDataUrl: "",
     sourceImageUrl: "",
     resultImageDataUrl: "",
@@ -305,6 +325,8 @@ const state = {
     bakeriesLoading: false,
     bakeriesFailed: false,
     bakeryDropdownOpen: false,
+    forcedBakeryId: EMBED_CONFIG.bakeryId,
+    forcedImageUrl: EMBED_CONFIG.imageUrl,
     selectedScenePresetId: SCENE_PRESETS[0].id,
     sceneCustomizeOpen: false,
     targetOrientation: "horizontal",
@@ -337,13 +359,73 @@ const OPENAI_SUPPORTED_IMAGE_TYPES = new Set([
 ]);
 
 function setStatus(message = "", isError = false) {
-    elements.status.textContent = message;
-    elements.status.classList.toggle("has-message", Boolean(message));
-    elements.status.classList.toggle("is-error", Boolean(message) && isError);
+    if (message && isError) {
+        showToast(message, "error");
+    }
+
+    elements.status.textContent = "";
+    elements.status.classList.remove("has-message", "is-error");
+}
+
+function setUploadStatus(element, message = "", isError = false) {
+    element.textContent = message;
+    element.classList.toggle("is-hidden", !message);
+    element.classList.toggle("has-message", Boolean(message));
+    element.classList.toggle("is-error", Boolean(message) && isError);
+}
+
+function showToast(message, type = "default", durationMs = 3000) {
+    if (!message) {
+        return;
+    }
+
+    const toast = document.createElement("div");
+    toast.className = `toast ${type === "error" ? "is-error" : ""} ${type === "success" ? "is-success" : ""}`.trim();
+    toast.textContent = message;
+    elements.toastContainer.appendChild(toast);
+
+    window.setTimeout(() => {
+        toast.remove();
+    }, durationMs);
+}
+
+function setButtonLoading(button, isLoading, loadingText = "Uploading...") {
+    const label = button.querySelector(".button-label");
+    const loading = button.querySelector(".button-loading");
+    const loadingTextNode = loading?.querySelector("span:last-child");
+
+    if (loadingTextNode) {
+        loadingTextNode.textContent = loadingText;
+    }
+
+    label?.classList.toggle("is-hidden", isLoading);
+    loading?.classList.toggle("is-hidden", !isLoading);
+}
+
+function syncUploadButtonLabels() {
+    if (state.forcedImageUrl) {
+        elements.singleUploadButtonLabel.textContent = "Set as product image";
+        return;
+    }
+
+    elements.singleUploadButtonLabel.textContent = "Upload to gallery";
 }
 
 function setVisible(element, isVisible) {
     element.classList.toggle("is-hidden", !isVisible);
+}
+
+function postMessageToParent(type, payload = {}) {
+    if (window.parent && window.parent !== window) {
+        window.parent.postMessage(
+            {
+                source: "ai-images-app",
+                type,
+                ...payload,
+            },
+            EMBED_CONFIG.parentOrigin || "*",
+        );
+    }
 }
 
 function formatUsdAmount(amount) {
@@ -438,6 +520,33 @@ function scheduleCostEstimateRefresh() {
     window.requestAnimationFrame(() => {
         updateGenerateButtonLabel();
     });
+}
+
+async function uploadImageToS3({ imageDataUrl, filenameBase, bakeryId = "" }) {
+    const response = await fetch("/api/upload-single-s3", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            imageDataUrl,
+            filenameBase,
+            bakeryId,
+        }),
+    });
+    let payload = null;
+
+    try {
+        payload = await response.json();
+    } catch {
+        payload = null;
+    }
+
+    if (!response.ok) {
+        throw new Error(payload?.error || "Upload to gallery failed. Please try again.");
+    }
+
+    return payload.uploaded;
 }
 
 function readStoredHistory(key) {
@@ -1090,6 +1199,7 @@ function resetSingleResult() {
     state.resultImageDataUrl = "";
     updatePreview(elements.resultPreview, elements.resultPlaceholder, "");
     elements.singleUploadS3Button.disabled = true;
+    setUploadStatus(elements.singleUploadStatus, "");
     setVisible(elements.singleDownloadSection, false);
 }
 
@@ -1112,21 +1222,36 @@ function setTargetOrientation(orientation) {
     updateStepVisibility();
 }
 
+function bootstrapForcedImageSelection() {
+    if (!state.forcedImageUrl) {
+        return;
+    }
+
+    handleImageUrlInput(state.forcedImageUrl);
+}
+
 function updateStepVisibility() {
     const isSingle = state.mode === "single";
     const sourceReady = isSingle ? hasSingleSource() : hasBulkSource();
     const sceneReady = isSceneReady();
     const showBakerySection =
-        !isSingle && (!state.bakeriesLoading || state.bakeriesLoaded || state.bakeriesFailed);
+        !isSingle &&
+        !state.forcedBakeryId &&
+        (!state.bakeriesLoading || state.bakeriesLoaded || state.bakeriesFailed);
 
     setVisible(elements.singlePreviewSection, isSingle);
     setVisible(elements.bulkPreviewSection, !isSingle);
     setVisible(elements.singleControls, isSingle);
     setVisible(elements.bulkControls, !isSingle);
+    setVisible(elements.modeSwitch, !state.forcedImageUrl);
     setVisible(elements.bakerySection, showBakerySection);
 
-    setVisible(elements.singleDropzoneWrap, isSingle && !hasSingleSource());
+    setVisible(
+        elements.singleDropzoneWrap,
+        isSingle && !hasSingleSource() && !state.forcedImageUrl,
+    );
     setVisible(elements.singleSourceSection, isSingle && hasSingleSource());
+    setVisible(elements.singleResetButton, !state.forcedImageUrl);
     setVisible(
         elements.categorySection,
         !isSingle && Boolean(elements.bakerySelect.value) && !state.bulkSelectionLoading,
@@ -1299,6 +1424,26 @@ async function ensureBakeriesLoaded() {
     }
 }
 
+async function bootstrapForcedBakerySelection() {
+    if (!state.forcedBakeryId) {
+        return;
+    }
+
+    await ensureBakeriesLoaded();
+
+    const matchingBakery = state.bakeries.find(
+        (bakery) => String(bakery.id) === String(state.forcedBakeryId),
+    );
+
+    if (!matchingBakery) {
+        throw new Error("The requested bakery could not be found.");
+    }
+
+    elements.bakerySelect.value = String(matchingBakery.id);
+    syncBakerySearchInput();
+    await loadCategories(String(matchingBakery.id));
+}
+
 async function loadCategories(bakeryId) {
     state.categories = [];
     state.products = [];
@@ -1413,6 +1558,9 @@ function renderBulkResults(results) {
 
     elements.bulkDownloadAllButton.disabled = successes.length === 0;
     elements.bulkUploadS3Button.disabled = successes.length === 0;
+    if (successes.length === 0) {
+        setUploadStatus(elements.bulkUploadStatus, "");
+    }
     setVisible(elements.bulkDownloadSection, successes.length > 0);
 
     if (successes.length === 0) {
@@ -1497,7 +1645,11 @@ function setMode(mode) {
     setVisible(elements.controlsLoadingOverlay, !isSingle && state.bakeriesLoading);
 
     if (!isSingle) {
-        ensureBakeriesLoaded().catch((error) => {
+        const bakeryBootstrap = state.forcedBakeryId
+            ? bootstrapForcedBakerySelection()
+            : ensureBakeriesLoaded();
+
+        bakeryBootstrap.catch((error) => {
             setStatus(error.message, true);
         });
     }
@@ -1954,38 +2106,29 @@ elements.singleUploadS3Button.addEventListener("click", async () => {
     elements.singleUploadS3Button.disabled = true;
 
     try {
-        const response = await fetch("/api/upload-single-s3", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                imageDataUrl: state.resultImageDataUrl,
-                filenameBase: state.uploadedFileName,
-            }),
+        setButtonLoading(elements.singleUploadS3Button, true, "Uploading...");
+        const uploaded = await uploadImageToS3({
+            imageDataUrl: state.resultImageDataUrl,
+            filenameBase: state.uploadedFileName,
+            bakeryId: state.forcedBakeryId,
         });
-
-        const payload = await response.json();
-
-        if (!response.ok) {
-            throw new Error(payload.error || "Could not upload the single image to S3.");
-        }
-
-        setStatus(`Uploaded to S3: ${payload.uploaded.key}`);
+        showToast(state.forcedImageUrl ? "Image is ready to use." : "Uploaded to gallery.", "success");
+        postMessageToParent("s3-uploaded", {
+            mode: "single",
+            bakeryId: state.forcedBakeryId || "",
+            sourceImageUrl: state.sourceImageUrl || "",
+            uploaded,
+        });
     } catch (error) {
-        setStatus(error.message, true);
+        showToast("Upload to gallery failed. Please try again.", "error");
     } finally {
+        setButtonLoading(elements.singleUploadS3Button, false);
         elements.singleUploadS3Button.disabled = false;
     }
 });
 
 elements.bulkUploadS3Button.addEventListener("click", async () => {
     const successes = state.bulkResults.filter((item) => item.imageDataUrl);
-
-    if (!elements.bakerySelect.value) {
-        setStatus("Bakery is required for bulk S3 upload.", true);
-        return;
-    }
 
     if (successes.length === 0) {
         setStatus("There are no generated results to upload yet.", true);
@@ -1995,31 +2138,22 @@ elements.bulkUploadS3Button.addEventListener("click", async () => {
     elements.bulkUploadS3Button.disabled = true;
 
     try {
-        const response = await fetch("/api/upload-bulk-s3", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                bakeryId: elements.bakerySelect.value,
-                items: successes.map((item) => ({
-                    id: item.id,
-                    name: item.name,
-                    imageDataUrl: item.imageDataUrl,
-                })),
-            }),
-        });
-
-        const payload = await response.json();
-
-        if (!response.ok) {
-            throw new Error(payload.error || "Could not upload the bulk images to S3.");
+        for (const [index, item] of successes.entries()) {
+            const progressText = `Uploading ${index + 1} of ${successes.length}...`;
+            setButtonLoading(elements.bulkUploadS3Button, true, progressText);
+            // Upload images one by one to keep each serverless request small enough for Vercel.
+            // eslint-disable-next-line no-await-in-loop
+            await uploadImageToS3({
+                imageDataUrl: item.imageDataUrl,
+                filenameBase: `${item.id || "item"}-${item.name || "generated-image"}`,
+                bakeryId: state.forcedBakeryId || elements.bakerySelect.value,
+            });
         }
-
-        setStatus(`Uploaded ${payload.uploads.length} image(s) to S3.`);
+        showToast("Uploaded to gallery.", "success");
     } catch (error) {
-        setStatus(error.message, true);
+        showToast("Upload to gallery failed. Please try again.", "error");
     } finally {
+        setButtonLoading(elements.bulkUploadS3Button, false);
         elements.bulkUploadS3Button.disabled =
             state.bulkResults.filter((item) => item.imageDataUrl).length === 0;
     }
@@ -2063,6 +2197,7 @@ fillSelect(elements.standSelect, PROMPT_OPTIONS.stands);
 renderScenePresets();
 updateSceneCustomizeVisibility();
 syncOrientationButtons();
+syncUploadButtonLabels();
 resetSceneSelections();
 updatePreview(elements.sourcePreview, elements.sourcePlaceholder, "");
 updatePreview(elements.resultPreview, elements.resultPlaceholder, "");
@@ -2072,8 +2207,11 @@ setVisible(elements.singleDownloadSection, false);
 setVisible(elements.bulkDownloadSection, false);
 elements.singleUploadS3Button.disabled = true;
 elements.bulkUploadS3Button.disabled = true;
+setButtonLoading(elements.singleUploadS3Button, false);
+setButtonLoading(elements.bulkUploadS3Button, false);
 renderBulkSources();
 renderBulkResults([]);
 updateSelectAllProductsLabel();
-setMode("bulk");
+bootstrapForcedImageSelection();
+setMode(state.mode);
 setStatus("");

@@ -249,14 +249,7 @@ body.embed-mode .hero {
 }
 
 .inline-loader {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    margin-top: 14px;
-    padding: 10px 12px;
-    border: 1px solid var(--line-soft);
-    border-radius: 14px;
-    background: rgba(0, 218, 199, 0.05);
+    display: none !important;
 }
 
 .inline-loader-spinner {
@@ -270,9 +263,7 @@ body.embed-mode .hero {
 }
 
 .inline-loader-text {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--muted);
+    display: none;
 }
 
 .scene-section {
@@ -1174,7 +1165,7 @@ body.embed-mode #singleDownloadSection .bulk-download-note {
 }
 
 .toast.is-success {
-    background: rgba(0, 160, 120, 0.96);
+    background: rgba(0, 198, 186, 0.96);
 }
 
 .preview-heading-row {

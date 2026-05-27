@@ -299,12 +299,13 @@ const EMBED_CONFIG = (() => {
     const params = new URLSearchParams(window.location.search);
     return {
         bakeryId: params.get("bakery_id")?.trim() || "",
+        bulkMode: params.get("bulk") === "true",
         imageUrl: params.get("image_url")?.trim() || "",
         parentOrigin: params.get("parent_origin")?.trim() || "*",
     };
 })();
 
-if (EMBED_CONFIG.imageUrl) {
+if (EMBED_CONFIG.imageUrl || (EMBED_CONFIG.bulkMode && EMBED_CONFIG.bakeryId)) {
     document.body.classList.add("embed-mode");
 }
 
@@ -327,6 +328,7 @@ const state = {
     bakeryDropdownOpen: false,
     forcedBakeryId: EMBED_CONFIG.bakeryId,
     forcedImageUrl: EMBED_CONFIG.imageUrl,
+    forcedBulkMode: EMBED_CONFIG.bulkMode && Boolean(EMBED_CONFIG.bakeryId),
     selectedScenePresetId: SCENE_PRESETS[0].id,
     sceneCustomizeOpen: false,
     targetOrientation: "horizontal",
@@ -367,6 +369,55 @@ function setStatus(message = "", isError = false) {
     elements.status.classList.remove("has-message", "is-error");
 }
 
+function normalizeGenerationErrorMessage(status, rawMessage = "") {
+    const message = String(rawMessage || "").trim();
+    const detectedStatusMatch = message.match(/\b(400|429)\b/);
+    const detectedStatus = status || (detectedStatusMatch ? Number(detectedStatusMatch[1]) : 0);
+
+    if (detectedStatus === 429) {
+        return "The generation limit has been reached. Please try again later.";
+    }
+
+    if (
+        detectedStatus === 400 &&
+        message.includes("Your request was rejected by the safety system")
+    ) {
+        return "This image could not be generated because the source image may contain restricted or invalid content. Please try a different image.";
+    }
+
+    if (message.includes("Your request was rejected by the safety system")) {
+        return "This image could not be generated because the source image may contain restricted or invalid content. Please try a different image.";
+    }
+
+    if (detectedStatus >= 400) {
+        return "Generation failed. Please try again.";
+    }
+
+    return message || "Generation failed. Please try again.";
+}
+
+async function parseGenerationError(response, fallbackMessage) {
+    let rawMessage = "";
+
+    try {
+        const contentType = response.headers.get("content-type") || "";
+
+        if (contentType.includes("application/json")) {
+            const payload = await response.json();
+            rawMessage = payload?.error || payload?.message || "";
+        } else {
+            rawMessage = await response.text();
+        }
+    } catch {
+        rawMessage = "";
+    }
+
+    return normalizeGenerationErrorMessage(
+        response.status,
+        rawMessage || fallbackMessage,
+    );
+}
+
 function setUploadStatus(element, message = "", isError = false) {
     element.textContent = message;
     element.classList.toggle("is-hidden", !message);
@@ -374,7 +425,7 @@ function setUploadStatus(element, message = "", isError = false) {
     element.classList.toggle("is-error", Boolean(message) && isError);
 }
 
-function showToast(message, type = "default", durationMs = 3000) {
+function showToast(message, type = "default", durationMs = 6000) {
     if (!message) {
         return;
     }
@@ -857,7 +908,7 @@ async function storeBulkGeneration(results) {
 
 function setBulkSelectionLoading(isLoading) {
     state.bulkSelectionLoading = isLoading;
-    setVisible(elements.bulkSelectionLoader, isLoading);
+    updateControlsLoadingOverlay();
     updateStepVisibility();
 }
 
@@ -873,8 +924,15 @@ function setBakeriesLoading(isLoading) {
         elements.bakerySearchInput.disabled = false;
         elements.bakerySearchInput.placeholder = "Choose a bakery";
     }
-    setVisible(elements.controlsLoadingOverlay, state.mode === "bulk" && isLoading);
+    updateControlsLoadingOverlay();
     updateStepVisibility();
+}
+
+function updateControlsLoadingOverlay() {
+    setVisible(
+        elements.controlsLoadingOverlay,
+        state.mode === "bulk" && (state.bakeriesLoading || state.bulkSelectionLoading),
+    );
 }
 
 function setPromptVisibility(isVisible) {
@@ -1243,7 +1301,7 @@ function updateStepVisibility() {
     setVisible(elements.bulkPreviewSection, !isSingle);
     setVisible(elements.singleControls, isSingle);
     setVisible(elements.bulkControls, !isSingle);
-    setVisible(elements.modeSwitch, !state.forcedImageUrl);
+    setVisible(elements.modeSwitch, !state.forcedImageUrl && !state.forcedBulkMode);
     setVisible(elements.bakerySection, showBakerySection);
 
     setVisible(
@@ -1429,19 +1487,25 @@ async function bootstrapForcedBakerySelection() {
         return;
     }
 
-    await ensureBakeriesLoaded();
+    setBulkSelectionLoading(true);
 
-    const matchingBakery = state.bakeries.find(
-        (bakery) => String(bakery.id) === String(state.forcedBakeryId),
-    );
+    try {
+        await ensureBakeriesLoaded();
 
-    if (!matchingBakery) {
-        throw new Error("The requested bakery could not be found.");
+        const matchingBakery = state.bakeries.find(
+            (bakery) => String(bakery.id) === String(state.forcedBakeryId),
+        );
+
+        if (!matchingBakery) {
+            throw new Error("The requested bakery could not be found.");
+        }
+
+        elements.bakerySelect.value = String(matchingBakery.id);
+        syncBakerySearchInput();
+        await loadCategories(String(matchingBakery.id));
+    } finally {
+        setBulkSelectionLoading(false);
     }
-
-    elements.bakerySelect.value = String(matchingBakery.id);
-    syncBakerySearchInput();
-    await loadCategories(String(matchingBakery.id));
 }
 
 async function loadCategories(bakeryId) {
@@ -1596,7 +1660,10 @@ function renderBulkResults(results) {
 
     elements.bulkErrors.classList.remove("is-hidden");
     elements.bulkErrors.innerHTML = errors
-        .map((item) => `<div>${item.name}: ${item.error}</div>`)
+        .map(
+            (item) =>
+                `<div>${item.name}: ${normalizeGenerationErrorMessage(0, item.error)}</div>`,
+        )
         .join("");
 }
 
@@ -1642,7 +1709,7 @@ function setMode(mode) {
 
     elements.singleModeButton.classList.toggle("is-active", isSingle);
     elements.bulkModeButton.classList.toggle("is-active", !isSingle);
-    setVisible(elements.controlsLoadingOverlay, !isSingle && state.bakeriesLoading);
+    updateControlsLoadingOverlay();
 
     if (!isSingle) {
         const bakeryBootstrap = state.forcedBakeryId
@@ -1703,11 +1770,13 @@ async function generateSingle() {
             }),
         });
 
-        const payload = await response.json();
-
         if (!response.ok) {
-            throw new Error(payload.error || "Generation failed.");
+            throw new Error(
+                await parseGenerationError(response, "Generation failed."),
+            );
         }
+
+        const payload = await response.json();
 
         state.resultImageDataUrl = payload.imageDataUrl;
         updatePreview(elements.resultPreview, elements.resultPlaceholder, state.resultImageDataUrl);
@@ -1769,8 +1838,9 @@ async function generateBulk() {
         });
 
         if (!response.ok) {
-            const payload = await response.json();
-            throw new Error(payload.error || "Bulk generation failed.");
+            throw new Error(
+                await parseGenerationError(response, "Bulk generation failed."),
+            );
         }
 
         const progressiveResults = new Array(selectedItems.length);
@@ -1790,7 +1860,9 @@ async function generateBulk() {
             }
 
             if (message.type === "error") {
-                throw new Error(message.error || "Bulk generation failed.");
+                throw new Error(
+                    normalizeGenerationErrorMessage(400, message.error || "Bulk generation failed."),
+                );
             }
         });
 
@@ -2112,7 +2184,12 @@ elements.singleUploadS3Button.addEventListener("click", async () => {
             filenameBase: state.uploadedFileName,
             bakeryId: state.forcedBakeryId,
         });
-        showToast(state.forcedImageUrl ? "Image is ready to use." : "Uploaded to gallery.", "success");
+        showToast(
+            state.forcedImageUrl
+                ? "Image is ready to use. You can choose it from the gallery when uploading images in the product builder."
+                : "Uploaded to gallery. You can choose this image from the gallery when uploading images in the product builder.",
+            "success",
+        );
         postMessageToParent("s3-uploaded", {
             mode: "single",
             bakeryId: state.forcedBakeryId || "",
@@ -2149,7 +2226,10 @@ elements.bulkUploadS3Button.addEventListener("click", async () => {
                 bakeryId: state.forcedBakeryId || elements.bakerySelect.value,
             });
         }
-        showToast("Uploaded to gallery.", "success");
+        showToast(
+            "Uploaded to gallery. You can choose these images from the gallery when uploading images in the product builder.",
+            "success",
+        );
     } catch (error) {
         showToast("Upload to gallery failed. Please try again.", "error");
     } finally {

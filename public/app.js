@@ -1,4 +1,6 @@
 const elements = {
+    workspace: document.getElementById("workspace"),
+    appGuard: document.getElementById("appGuard"),
     modeSwitch: document.getElementById("modeSwitch"),
     singleModeButton: document.getElementById("singleModeButton"),
     bulkModeButton: document.getElementById("bulkModeButton"),
@@ -297,9 +299,11 @@ const SCENE_PRESETS = [
 
 const EMBED_CONFIG = (() => {
     const params = new URLSearchParams(window.location.search);
+    const envParam = params.get("env")?.trim().toLowerCase();
     return {
         bakeryId: params.get("bakery_id")?.trim() || "",
         bulkMode: params.get("bulk") === "true",
+        environment: envParam === "stage" ? "stage" : "production",
         imageUrl: params.get("image_url")?.trim() || "",
         parentOrigin: params.get("parent_origin")?.trim() || "*",
     };
@@ -329,6 +333,7 @@ const state = {
     forcedBakeryId: EMBED_CONFIG.bakeryId,
     forcedImageUrl: EMBED_CONFIG.imageUrl,
     forcedBulkMode: EMBED_CONFIG.bulkMode && Boolean(EMBED_CONFIG.bakeryId),
+    appEnvironment: EMBED_CONFIG.environment,
     selectedScenePresetId: SCENE_PRESETS[0].id,
     sceneCustomizeOpen: false,
     targetOrientation: "horizontal",
@@ -367,6 +372,27 @@ function setStatus(message = "", isError = false) {
 
     elements.status.textContent = "";
     elements.status.classList.remove("has-message", "is-error");
+}
+
+function buildInternalApiUrl(pathname, query = {}) {
+    const url = new URL(pathname, window.location.origin);
+    const mergedQuery = {
+        ...query,
+        env: state.appEnvironment,
+    };
+
+    Object.entries(mergedQuery).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== "") {
+            url.searchParams.set(key, String(value));
+        }
+    });
+
+    return `${url.pathname}${url.search}`;
+}
+
+function showBakeryContextGuard() {
+    setVisible(elements.workspace, false);
+    setVisible(elements.appGuard, true);
 }
 
 function normalizeGenerationErrorMessage(status, rawMessage = "") {
@@ -583,6 +609,7 @@ async function uploadImageToS3({ imageDataUrl, filenameBase, bakeryId = "" }) {
             imageDataUrl,
             filenameBase,
             bakeryId,
+            env: state.appEnvironment,
         }),
     });
     let payload = null;
@@ -1447,7 +1474,7 @@ function handleImageUrlInput(value) {
 }
 
 async function fetchJson(url) {
-    const response = await fetch(url);
+    const response = await fetch(buildInternalApiUrl(url));
     const payload = await response.json();
 
     if (!response.ok) {
@@ -2292,6 +2319,12 @@ setButtonLoading(elements.bulkUploadS3Button, false);
 renderBulkSources();
 renderBulkResults([]);
 updateSelectAllProductsLabel();
-bootstrapForcedImageSelection();
-setMode(state.mode);
-setStatus("");
+
+if (!EMBED_CONFIG.bakeryId) {
+    showBakeryContextGuard();
+    setStatus("");
+} else {
+    bootstrapForcedImageSelection();
+    setMode(state.mode);
+    setStatus("");
+}

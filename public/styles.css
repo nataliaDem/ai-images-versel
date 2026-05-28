@@ -98,6 +98,17 @@ body.embed-mode .hero {
     margin-top: 16px;
 }
 
+.app-guard {
+    margin-top: 16px;
+    padding: 28px;
+    text-align: center;
+}
+
+.app-guard h2 {
+    margin: 0;
+    font-size: 20px;
+}
+
 .panel {
     position: relative;
     border: 1px solid rgba(34, 22, 31, 0.14);

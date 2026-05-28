@@ -1,4 +1,8 @@
-const { listBakeries, sendJson } = require("../lib/image-ui-backend");
+const {
+    listBakeries,
+    normalizeAppEnvironment,
+    sendJson,
+} = require("../lib/image-ui-backend");
 
 module.exports = async (req, res) => {
     if (req.method !== "GET") {
@@ -6,7 +10,8 @@ module.exports = async (req, res) => {
     }
 
     try {
-        const bakeries = await listBakeries();
+        const environment = normalizeAppEnvironment(req.query?.env);
+        const bakeries = await listBakeries(environment);
         return sendJson(res, 200, { bakeries });
     } catch (error) {
         return sendJson(res, 400, {

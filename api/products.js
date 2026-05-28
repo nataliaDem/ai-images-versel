@@ -1,4 +1,8 @@
-const { listProducts, sendJson } = require("../lib/image-ui-backend");
+const {
+    listProducts,
+    normalizeAppEnvironment,
+    sendJson,
+} = require("../lib/image-ui-backend");
 
 module.exports = async (req, res) => {
     if (req.method !== "GET") {
@@ -8,12 +12,13 @@ module.exports = async (req, res) => {
     try {
         const bakeryId = req.query?.bakeryId;
         const categoryId = req.query?.categoryId;
+        const environment = normalizeAppEnvironment(req.query?.env);
 
         if (!bakeryId || !categoryId) {
             throw new Error("bakeryId and categoryId are required.");
         }
 
-        const products = await listProducts(bakeryId, categoryId);
+        const products = await listProducts(bakeryId, categoryId, environment);
         return sendJson(res, 200, { products });
     } catch (error) {
         return sendJson(res, 400, {

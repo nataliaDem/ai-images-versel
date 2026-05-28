@@ -1,4 +1,5 @@
 const {
+    normalizeAppEnvironment,
     readJsonBody,
     sendJson,
     uploadSingleResultToS3,
@@ -15,6 +16,7 @@ module.exports = async (req, res) => {
             imageDataUrl: body.imageDataUrl,
             filenameBase: body.filenameBase,
             bakeryId: body.bakeryId,
+            environment: normalizeAppEnvironment(body.env),
         });
 
         return sendJson(res, 200, { uploaded });

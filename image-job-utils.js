@@ -1,5 +1,11 @@
 const fs = require("fs");
 const path = require("path");
+const { File } = require("node:buffer");
+
+if (typeof globalThis.File === "undefined") {
+    globalThis.File = File;
+}
+
 const { toFile } = require("openai");
 const fetch = (...args) =>
     import("node-fetch").then(({ default: fetch }) => fetch(...args));

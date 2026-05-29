@@ -390,11 +390,6 @@ function buildInternalApiUrl(pathname, query = {}) {
     return `${url.pathname}${url.search}`;
 }
 
-function showBakeryContextGuard() {
-    setVisible(elements.workspace, false);
-    setVisible(elements.appGuard, true);
-}
-
 function normalizeGenerationErrorMessage(status, rawMessage = "") {
     const message = String(rawMessage || "").trim();
     const detectedStatusMatch = message.match(/\b(400|429)\b/);
@@ -599,7 +594,17 @@ function scheduleCostEstimateRefresh() {
     });
 }
 
-async function uploadImageToS3({ imageDataUrl, filenameBase, bakeryId = "" }) {
+async function uploadImageToS3({
+    imageDataUrl,
+    filenameBase,
+    bakeryId = "",
+    bakeryName = "",
+    categoryId = "",
+    categoryName = "",
+    mode = "single",
+    sourceType = "",
+    notifySlack = true,
+}) {
     const response = await fetch("/api/upload-single-s3", {
         method: "POST",
         headers: {
@@ -609,6 +614,12 @@ async function uploadImageToS3({ imageDataUrl, filenameBase, bakeryId = "" }) {
             imageDataUrl,
             filenameBase,
             bakeryId,
+            bakeryName,
+            categoryId,
+            categoryName,
+            mode,
+            sourceType,
+            notifySlack,
             env: state.appEnvironment,
         }),
     });
@@ -625,6 +636,23 @@ async function uploadImageToS3({ imageDataUrl, filenameBase, bakeryId = "" }) {
     }
 
     return payload.uploaded;
+}
+
+async function notifyAction(payload) {
+    try {
+        await fetch("/api/notify-action", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                ...payload,
+                env: state.appEnvironment,
+            }),
+        });
+    } catch {
+        // Best-effort only; user actions should not fail if Slack tracking is unavailable.
+    }
 }
 
 function readStoredHistory(key) {
@@ -1791,6 +1819,11 @@ async function generateSingle() {
             body: JSON.stringify({
                 imageDataUrl: state.sourceImageDataUrl,
                 imageUrl: state.sourceImageUrl,
+                bakeryId: state.forcedBakeryId || "",
+                bakeryName: "",
+                categoryId: "",
+                categoryName: "",
+                env: state.appEnvironment,
                 prompt: elements.promptEditor.value,
                 preserveOrientation: elements.preserveOrientation.checked,
                 targetOrientation: state.targetOrientation,
@@ -1853,6 +1886,11 @@ async function generateBulk() {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
+                bakeryId: state.forcedBakeryId || elements.bakerySelect.value,
+                bakeryName: getSelectedText(elements.bakerySelect) || "",
+                categoryId: elements.categorySelect.value,
+                categoryName: getSelectedText(elements.categorySelect) || "",
+                env: state.appEnvironment,
                 items: selectedItems.map((product) => ({
                     id: product.id,
                     name: product.name,
@@ -2187,8 +2225,38 @@ elements.bulkDownloadAllButton.addEventListener("click", async () => {
         link.click();
         link.remove();
         URL.revokeObjectURL(blobUrl);
+        notifyAction({
+            operation: "download",
+            status: "success",
+            mode: "bulk",
+            bakeryId: state.forcedBakeryId || elements.bakerySelect.value,
+            bakeryName,
+            categoryId: elements.categorySelect.value,
+            categoryName,
+            itemCount: successes.length,
+            successCount: successes.length,
+            errorCount: 0,
+            fileCount: successes.length,
+            archiveName,
+            sourceType: "generated_results",
+        });
         setStatus("Archive download started.");
     } catch (error) {
+        notifyAction({
+            operation: "download",
+            status: "error",
+            mode: "bulk",
+            bakeryId: state.forcedBakeryId || elements.bakerySelect.value,
+            bakeryName: getSelectedText(elements.bakerySelect) || "",
+            categoryId: elements.categorySelect.value,
+            categoryName: getSelectedText(elements.categorySelect) || "",
+            itemCount: successes.length,
+            successCount: 0,
+            errorCount: successes.length || 1,
+            fileCount: 0,
+            sourceType: "generated_results",
+            errorMessage: error.message,
+        });
         setStatus(error.message, true);
     } finally {
         elements.bulkDownloadAllButton.disabled =
@@ -2210,6 +2278,11 @@ elements.singleUploadS3Button.addEventListener("click", async () => {
             imageDataUrl: state.resultImageDataUrl,
             filenameBase: state.uploadedFileName,
             bakeryId: state.forcedBakeryId,
+            bakeryName: "",
+            categoryId: "",
+            categoryName: "",
+            mode: "single",
+            sourceType: state.forcedImageUrl ? "image_url" : "image_upload",
         });
         showToast(
             state.forcedImageUrl
@@ -2233,6 +2306,10 @@ elements.singleUploadS3Button.addEventListener("click", async () => {
 
 elements.bulkUploadS3Button.addEventListener("click", async () => {
     const successes = state.bulkResults.filter((item) => item.imageDataUrl);
+    const bakeryId = state.forcedBakeryId || elements.bakerySelect.value;
+    const bakeryName = getSelectedText(elements.bakerySelect) || "";
+    const categoryId = elements.categorySelect.value;
+    const categoryName = getSelectedText(elements.categorySelect) || "";
 
     if (successes.length === 0) {
         setStatus("There are no generated results to upload yet.", true);
@@ -2246,18 +2323,54 @@ elements.bulkUploadS3Button.addEventListener("click", async () => {
             const progressText = `Uploading ${index + 1} of ${successes.length}...`;
             setButtonLoading(elements.bulkUploadS3Button, true, progressText);
             // Upload images one by one to keep each serverless request small enough for Vercel.
+            // Slack is reported once after the whole batch finishes.
             // eslint-disable-next-line no-await-in-loop
             await uploadImageToS3({
                 imageDataUrl: item.imageDataUrl,
                 filenameBase: `${item.id || "item"}-${item.name || "generated-image"}`,
-                bakeryId: state.forcedBakeryId || elements.bakerySelect.value,
+                bakeryId,
+                bakeryName,
+                categoryId,
+                categoryName,
+                mode: "bulk",
+                sourceType: "generated_results",
+                notifySlack: false,
             });
         }
+        notifyAction({
+            operation: "upload",
+            status: "success",
+            mode: "bulk",
+            bakeryId,
+            bakeryName,
+            categoryId,
+            categoryName,
+            itemCount: successes.length,
+            successCount: successes.length,
+            errorCount: 0,
+            fileCount: successes.length,
+            sourceType: "generated_results",
+        });
         showToast(
             "Uploaded to gallery. You can choose these images from the gallery when uploading images in the product builder.",
             "success",
         );
     } catch (error) {
+        notifyAction({
+            operation: "upload",
+            status: "error",
+            mode: "bulk",
+            bakeryId,
+            bakeryName,
+            categoryId,
+            categoryName,
+            itemCount: successes.length,
+            successCount: 0,
+            errorCount: successes.length || 1,
+            fileCount: 0,
+            sourceType: "generated_results",
+            errorMessage: error.message,
+        });
         showToast("Upload to gallery failed. Please try again.", "error");
     } finally {
         setButtonLoading(elements.bulkUploadS3Button, false);
@@ -2295,6 +2408,21 @@ elements.saveButton.addEventListener("click", () => {
     }
 
     downloadImage(state.resultImageDataUrl, state.uploadedFileName);
+    notifyAction({
+        operation: "download",
+        status: "success",
+        mode: "single",
+        bakeryId: state.forcedBakeryId || "",
+        bakeryName: "",
+        categoryId: "",
+        categoryName: "",
+        itemCount: 1,
+        successCount: 1,
+        errorCount: 0,
+        fileCount: 1,
+        filenameBase: state.uploadedFileName,
+        sourceType: state.forcedImageUrl ? "image_url" : "image_upload",
+    });
     setStatus("Download started.");
 });
 
@@ -2320,11 +2448,6 @@ renderBulkSources();
 renderBulkResults([]);
 updateSelectAllProductsLabel();
 
-if (!EMBED_CONFIG.bakeryId) {
-    showBakeryContextGuard();
-    setStatus("");
-} else {
-    bootstrapForcedImageSelection();
-    setMode(state.mode);
-    setStatus("");
-}
+bootstrapForcedImageSelection();
+setMode(state.mode);
+setStatus("");

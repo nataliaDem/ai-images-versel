@@ -12,6 +12,7 @@ Vercel-ready version of the AI image editor.
 - `S3_REGION`
 - `S3_ACCESS_KEY_ID`
 - `S3_SECRET_ACCESS_KEY`
+- `SLACK_GENERATION_WEBHOOK_URL` (optional, falls back to `SLACK_WEBHOOK_URL`)
 
 Query param:
 

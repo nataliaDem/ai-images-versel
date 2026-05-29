@@ -357,6 +357,7 @@ const IMAGE_PRICING = {
     horizontal: 0.05,
     vertical: 0.05,
 };
+const BULK_GENERATION_CHUNK_SIZE = 5;
 const OPENAI_SUPPORTED_IMAGE_TYPES = new Set([
     "image/png",
     "image/jpeg",
@@ -1853,10 +1854,73 @@ async function generateSingle() {
     }
 }
 
+async function generateBulkChunk({
+    items,
+    bakeryId,
+    bakeryName,
+    categoryId,
+    categoryName,
+    onResult,
+}) {
+    const response = await fetch("/api/generate-bulk", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            bakeryId,
+            bakeryName,
+            categoryId,
+            categoryName,
+            env: state.appEnvironment,
+            items: items.map((product) => ({
+                id: product.id,
+                name: product.name,
+                imageUrl: product.imageUrl,
+            })),
+            prompt: elements.promptEditor.value,
+            preserveOrientation: elements.preserveOrientation.checked,
+            targetOrientation: state.targetOrientation,
+        }),
+    });
+
+    if (!response.ok) {
+        throw new Error(
+            await parseGenerationError(response, "Bulk generation failed."),
+        );
+    }
+
+    let completedResults = null;
+
+    await readNdjsonStream(response, (message) => {
+        if (message.type === "result") {
+            onResult(message.index, message.result);
+            return;
+        }
+
+        if (message.type === "complete") {
+            completedResults = Array.isArray(message.results) ? message.results : [];
+            return;
+        }
+
+        if (message.type === "error") {
+            throw new Error(
+                normalizeGenerationErrorMessage(400, message.error || "Bulk generation failed."),
+            );
+        }
+    });
+
+    return completedResults || [];
+}
+
 async function generateBulk() {
     const selectedItems = state.products.filter((product) =>
         state.selectedProductIds.has(product.id),
     );
+    const bakeryId = state.forcedBakeryId || elements.bakerySelect.value;
+    const bakeryName = getSelectedText(elements.bakerySelect) || "";
+    const categoryId = elements.categorySelect.value;
+    const categoryName = getSelectedText(elements.categorySelect) || "";
 
     if (!elements.bakerySelect.value || !elements.categorySelect.value) {
         setStatus("Please choose a bakery and category first.", true);
@@ -1880,61 +1944,40 @@ async function generateBulk() {
     setStatus("");
 
     try {
-        const response = await fetch("/api/generate-bulk", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                bakeryId: state.forcedBakeryId || elements.bakerySelect.value,
-                bakeryName: getSelectedText(elements.bakerySelect) || "",
-                categoryId: elements.categorySelect.value,
-                categoryName: getSelectedText(elements.categorySelect) || "",
-                env: state.appEnvironment,
-                items: selectedItems.map((product) => ({
-                    id: product.id,
-                    name: product.name,
-                    imageUrl: product.imageUrl,
-                })),
-                prompt: elements.promptEditor.value,
-                preserveOrientation: elements.preserveOrientation.checked,
-                targetOrientation: state.targetOrientation,
-            }),
-        });
+        const progressiveResults = new Array(selectedItems.length);
+        const completedResults = new Array(selectedItems.length);
 
-        if (!response.ok) {
-            throw new Error(
-                await parseGenerationError(response, "Bulk generation failed."),
+        for (
+            let chunkStart = 0;
+            chunkStart < selectedItems.length;
+            chunkStart += BULK_GENERATION_CHUNK_SIZE
+        ) {
+            const chunkItems = selectedItems.slice(
+                chunkStart,
+                chunkStart + BULK_GENERATION_CHUNK_SIZE,
             );
+            const chunkResults = await generateBulkChunk({
+                items: chunkItems,
+                bakeryId,
+                bakeryName,
+                categoryId,
+                categoryName,
+                onResult(chunkIndex, result) {
+                    progressiveResults[chunkStart + chunkIndex] = result;
+                    renderBulkResults(progressiveResults.filter(Boolean));
+                },
+            });
+
+            chunkResults.forEach((result, chunkIndex) => {
+                completedResults[chunkStart + chunkIndex] = result;
+                progressiveResults[chunkStart + chunkIndex] = result;
+            });
+            renderBulkResults(progressiveResults.filter(Boolean));
         }
 
-        const progressiveResults = new Array(selectedItems.length);
-        let completedResults = null;
-
-        await readNdjsonStream(response, (message) => {
-            if (message.type === "result") {
-                progressiveResults[message.index] = message.result;
-                renderBulkResults(progressiveResults.filter(Boolean));
-                return;
-            }
-
-            if (message.type === "complete") {
-                completedResults = Array.isArray(message.results) ? message.results : [];
-                renderBulkResults(completedResults);
-                return;
-            }
-
-            if (message.type === "error") {
-                throw new Error(
-                    normalizeGenerationErrorMessage(400, message.error || "Bulk generation failed."),
-                );
-            }
-        });
-
-        await storeBulkGeneration(completedResults || progressiveResults.filter(Boolean));
+        await storeBulkGeneration(completedResults.filter(Boolean));
         setStatus("");
     } catch (error) {
-        renderBulkResults([]);
         setStatus(error.message, true);
     } finally {
         setBulkResultLoading(false);

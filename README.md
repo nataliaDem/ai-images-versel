@@ -13,6 +13,8 @@ Vercel-ready version of the AI image editor.
 - `S3_ACCESS_KEY_ID`
 - `S3_SECRET_ACCESS_KEY`
 - `SLACK_GENERATION_WEBHOOK_URL` (optional, falls back to `SLACK_WEBHOOK_URL`)
+- `OPENAI_IMAGE_RATE_LIMIT_PER_MINUTE` (optional, default `5`)
+- `OPENAI_IMAGE_RATE_LIMIT_WINDOW_MS` (optional, default `60000`)
 
 Query param:
 

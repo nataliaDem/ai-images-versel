@@ -13,15 +13,7 @@ const elements = {
     imageUrlInput: document.getElementById("imageUrlInput"),
     singleResetButton: document.getElementById("singleResetButton"),
     singleSourceSection: document.getElementById("singleSourceSection"),
-    bakerySection: document.getElementById("bakerySection"),
-    bakeryCombobox: document.getElementById("bakeryCombobox"),
-    bakerySearchInput: document.getElementById("bakerySearchInput"),
-    bakeryComboboxButton: document.getElementById("bakeryComboboxButton"),
-    bakeryDropdown: document.getElementById("bakeryDropdown"),
-    bakerySelect: document.getElementById("bakerySelect"),
     bulkSelectionLoader: document.getElementById("bulkSelectionLoader"),
-    categorySection: document.getElementById("categorySection"),
-    categorySelect: document.getElementById("categorySelect"),
     bulkSourceSection: document.getElementById("bulkSourceSection"),
     selectAllProducts: document.getElementById("selectAllProducts"),
     selectAllProductsLabel: document.getElementById("selectAllProductsLabel"),
@@ -54,7 +46,6 @@ const elements = {
     singleUploadS3Button: document.getElementById("singleUploadS3Button"),
     singleUploadButtonLabel: document.getElementById("singleUploadButtonLabel"),
     singleUploadButtonText: document.getElementById("singleUploadButtonText"),
-    singleUploadStatus: document.getElementById("singleUploadStatus"),
     singleDownloadSection: document.getElementById("singleDownloadSection"),
     sourcePreview: document.getElementById("sourcePreview"),
     sourcePlaceholder: document.getElementById("sourcePlaceholder"),
@@ -68,7 +59,6 @@ const elements = {
     bulkDownloadAllButton: document.getElementById("bulkDownloadAllButton"),
     bulkUploadS3Button: document.getElementById("bulkUploadS3Button"),
     bulkUploadButtonText: document.getElementById("bulkUploadButtonText"),
-    bulkUploadStatus: document.getElementById("bulkUploadStatus"),
     bulkDownloadSection: document.getElementById("bulkDownloadSection"),
     bulkErrors: document.getElementById("bulkErrors"),
     status: document.getElementById("status"),
@@ -81,6 +71,32 @@ const elements = {
     lightboxImage: document.getElementById("lightboxImage"),
     lightboxClose: document.getElementById("lightboxClose"),
 };
+
+function decodeBase64Url(value) {
+    const normalized = String(value || "")
+        .replace(/-/g, "+")
+        .replace(/_/g, "/");
+    const padding = normalized.length % 4 === 0 ? "" : "=".repeat(4 - (normalized.length % 4));
+    return window.atob(`${normalized}${padding}`);
+}
+
+function readEmbedTokenPayload(token) {
+    if (!token) {
+        return null;
+    }
+
+    try {
+        const [encodedPayload] = String(token).split(".");
+
+        if (!encodedPayload) {
+            return null;
+        }
+
+        return JSON.parse(decodeBase64Url(encodedPayload));
+    } catch {
+        return null;
+    }
+}
 
 const PROMPT_OPTIONS = {
     walls: [
@@ -299,15 +315,40 @@ const SCENE_PRESETS = [
 
 const EMBED_CONFIG = (() => {
     const params = new URLSearchParams(window.location.search);
+    const token = params.get("token")?.trim() || "";
+    const tokenPayload = readEmbedTokenPayload(token);
     const envParam = params.get("env")?.trim().toLowerCase();
+    const hasToken = Boolean(token);
     return {
-        bakeryId: params.get("bakery_id")?.trim() || "",
-        bulkMode: params.get("bulk") === "true",
-        environment: envParam === "stage" ? "stage" : "production",
-        imageUrl: params.get("image_url")?.trim() || "",
-        parentOrigin: params.get("parent_origin")?.trim() || "*",
+        token,
+        hasToken,
+        tokenPayload,
+        bakeryId: hasToken
+            ? tokenPayload?.bakery_id || ""
+            : params.get("bakery_id")?.trim() || "",
+        categoryId: hasToken
+            ? tokenPayload?.category_id || tokenPayload?.category || ""
+            : params.get("category_id")?.trim() || params.get("category")?.trim() || "",
+        bulkMode:
+            hasToken
+                ? (tokenPayload?.mode || "").trim().toLowerCase() === "bulk"
+                : params.get("bulk") === "true",
+        environment:
+            String(hasToken ? tokenPayload?.env || "" : envParam || "").trim().toLowerCase() === "stage"
+                ? "stage"
+                : "production",
+        imageUrl: hasToken
+            ? tokenPayload?.image_url || ""
+            : params.get("image_url")?.trim() || "",
+        parentOrigin: hasToken
+            ? tokenPayload?.parent_origin || "*"
+            : params.get("parent_origin")?.trim() || "*",
     };
 })();
+
+if (EMBED_CONFIG.token) {
+    console.log("Parsed embed token payload:", EMBED_CONFIG.tokenPayload);
+}
 
 if (EMBED_CONFIG.imageUrl || (EMBED_CONFIG.bulkMode && EMBED_CONFIG.bakeryId)) {
     document.body.classList.add("embed-mode");
@@ -319,21 +360,18 @@ const state = {
     sourceImageUrl: "",
     resultImageDataUrl: "",
     uploadedFileName: "",
-    bakeriesLoaded: false,
-    bakeries: [],
-    filteredBakeries: [],
-    categories: [],
     products: [],
     selectedProductIds: new Set(),
     bulkResults: [],
     bulkSelectionLoading: false,
-    bakeriesLoading: false,
-    bakeriesFailed: false,
-    bakeryDropdownOpen: false,
     forcedBakeryId: EMBED_CONFIG.bakeryId,
+    forcedCategoryId: EMBED_CONFIG.categoryId,
     forcedImageUrl: EMBED_CONFIG.imageUrl,
     forcedBulkMode: EMBED_CONFIG.bulkMode && Boolean(EMBED_CONFIG.bakeryId),
     appEnvironment: EMBED_CONFIG.environment,
+    embedToken: EMBED_CONFIG.token,
+    bakeryAdminToken: "",
+    bakeryAdminTokenPromise: null,
     selectedScenePresetId: SCENE_PRESETS[0].id,
     sceneCustomizeOpen: false,
     targetOrientation: "horizontal",
@@ -379,6 +417,7 @@ function buildInternalApiUrl(pathname, query = {}) {
     const mergedQuery = {
         ...query,
         env: state.appEnvironment,
+        token: state.embedToken,
     };
 
     Object.entries(mergedQuery).forEach(([key, value]) => {
@@ -399,6 +438,11 @@ function normalizeGenerationErrorMessage(status, rawMessage = "") {
     const message = String(rawMessage || "").trim();
     const detectedStatusMatch = message.match(/\b(400|429)\b/);
     const detectedStatus = status || (detectedStatusMatch ? Number(detectedStatusMatch[1]) : 0);
+    const genericConnectionMessages = new Set([
+        "Connection error.",
+        "Connection error",
+        "Failed to fetch",
+    ]);
 
     if (detectedStatus === 429) {
         return "The generation limit has been reached. Please try again later.";
@@ -415,8 +459,14 @@ function normalizeGenerationErrorMessage(status, rawMessage = "") {
         return "This image could not be generated because the source image may contain restricted or invalid content. Please try a different image.";
     }
 
+    if (genericConnectionMessages.has(message)) {
+        return "Connection error. Please try again.";
+    }
+
     if (detectedStatus >= 400) {
-        return "Generation failed. Please try again.";
+        return message
+            ? `Generation failed. ${message}`
+            : "Generation failed. Please try again.";
     }
 
     return message || "Generation failed. Please try again.";
@@ -442,13 +492,6 @@ async function parseGenerationError(response, fallbackMessage) {
         response.status,
         rawMessage || fallbackMessage,
     );
-}
-
-function setUploadStatus(element, message = "", isError = false) {
-    element.textContent = message;
-    element.classList.toggle("is-hidden", !message);
-    element.classList.toggle("has-message", Boolean(message));
-    element.classList.toggle("is-error", Boolean(message) && isError);
 }
 
 function showToast(message, type = "default", durationMs = 6000) {
@@ -503,6 +546,39 @@ function postMessageToParent(type, payload = {}) {
             EMBED_CONFIG.parentOrigin || "*",
         );
     }
+}
+
+function requestBakeryAdminToken() {
+    if (state.bakeryAdminToken) {
+        return Promise.resolve(state.bakeryAdminToken);
+    }
+
+    if (state.bakeryAdminTokenPromise) {
+        return state.bakeryAdminTokenPromise;
+    }
+
+    state.bakeryAdminTokenPromise = new Promise((resolve, reject) => {
+        const timeoutId = window.setTimeout(() => {
+            state.bakeryAdminTokenPromise = null;
+            reject(new Error("Authorization token was not provided."));
+        }, 15000);
+
+        state.resolveBakeryAdminToken = (token) => {
+            window.clearTimeout(timeoutId);
+            state.bakeryAdminToken = token;
+            state.bakeryAdminTokenPromise = null;
+            resolve(token);
+        };
+    });
+
+    postMessageToParent("request-auth-token", {
+        bakeryId: state.forcedBakeryId || "",
+        categoryId: state.forcedCategoryId || "",
+        env: state.appEnvironment,
+        mode: state.mode,
+    });
+
+    return state.bakeryAdminTokenPromise;
 }
 
 function formatUsdAmount(amount) {
@@ -610,6 +686,7 @@ async function uploadImageToS3({ imageDataUrl, filenameBase, bakeryId = "" }) {
             filenameBase,
             bakeryId,
             env: state.appEnvironment,
+            token: state.embedToken,
         }),
     });
     let payload = null;
@@ -915,20 +992,21 @@ async function storeSingleGeneration(resultImageDataUrl) {
 async function storeBulkGeneration(results) {
     const id = createHistoryId("bulk");
     const date = new Date().toISOString();
+    const bakeryId = state.forcedBakeryId || "";
 
     await putIndexedDbRecord(DB_CONFIG.bulkStore, {
         id,
         date,
-        bakeryId: elements.bakerySelect.value || "",
-        categoryId: elements.categorySelect.value || "",
+        bakeryId,
+        categoryId: state.forcedCategoryId || "",
         results,
     });
 
     appendStoredHistory(STORAGE_KEYS.bulkHistory, {
         id,
         date,
-        bakeryId: elements.bakerySelect.value || "",
-        categoryId: elements.categorySelect.value || "",
+        bakeryId,
+        categoryId: state.forcedCategoryId || "",
         resultCount: Array.isArray(results) ? results.length : 0,
     });
 }
@@ -939,26 +1017,10 @@ function setBulkSelectionLoading(isLoading) {
     updateStepVisibility();
 }
 
-function setBakeriesLoading(isLoading) {
-    state.bakeriesLoading = isLoading;
-    if (isLoading) {
-        elements.bakerySelect.disabled = true;
-        elements.bakerySearchInput.disabled = true;
-        setBakeryDropdownOpen(false);
-        elements.bakerySearchInput.placeholder = "Loading bakeries...";
-    }
-    if (!isLoading) {
-        elements.bakerySearchInput.disabled = false;
-        elements.bakerySearchInput.placeholder = "Choose a bakery";
-    }
-    updateControlsLoadingOverlay();
-    updateStepVisibility();
-}
-
 function updateControlsLoadingOverlay() {
     setVisible(
         elements.controlsLoadingOverlay,
-        state.mode === "bulk" && (state.bakeriesLoading || state.bulkSelectionLoading),
+        state.mode === "bulk" && state.bulkSelectionLoading,
     );
 }
 
@@ -1126,82 +1188,6 @@ function fillSelect(select, options, placeholder) {
     });
 }
 
-function filterBakeries(searchTerm = "") {
-    const normalizedSearch = searchTerm.trim().toLowerCase();
-    const selectedValue = elements.bakerySelect.value;
-
-    state.filteredBakeries = state.bakeries.filter((bakery) =>
-        !normalizedSearch || String(bakery.name || "").toLowerCase().includes(normalizedSearch),
-    );
-
-    fillSelect(elements.bakerySelect, state.filteredBakeries, "Choose a bakery");
-
-    if (
-        selectedValue &&
-        state.filteredBakeries.some((bakery) => String(bakery.id) === String(selectedValue))
-    ) {
-        elements.bakerySelect.value = selectedValue;
-    }
-
-    elements.bakerySelect.disabled = state.bakeriesLoading || state.filteredBakeries.length === 0;
-    renderBakeryDropdown();
-}
-
-function setBakeryDropdownOpen(isOpen) {
-    state.bakeryDropdownOpen = isOpen;
-    setVisible(
-        elements.bakeryDropdown,
-        isOpen && !state.bakeriesLoading && !elements.bakerySelect.disabled,
-    );
-}
-
-function renderBakeryDropdown() {
-    if (state.filteredBakeries.length === 0) {
-        elements.bakeryDropdown.innerHTML =
-            '<div class="search-select-empty">No bakeries found</div>';
-        return;
-    }
-
-    elements.bakeryDropdown.innerHTML = state.filteredBakeries
-        .map(
-            (bakery) => `
-                <button
-                    class="search-select-option ${String(bakery.id) === String(elements.bakerySelect.value) ? "is-active" : ""}"
-                    type="button"
-                    data-bakery-id="${bakery.id}"
-                >
-                    ${bakery.name}
-                </button>
-            `,
-        )
-        .join("");
-}
-
-function syncBakerySearchInput() {
-    const selectedOption = state.bakeries.find(
-        (bakery) => String(bakery.id) === String(elements.bakerySelect.value),
-    );
-
-    elements.bakerySearchInput.value = selectedOption?.name || "";
-}
-
-function getBakeryDropdownSearchTerm() {
-    const currentValue = elements.bakerySearchInput.value.trim();
-    const selectedOption = state.bakeries.find(
-        (bakery) => String(bakery.id) === String(elements.bakerySelect.value),
-    );
-
-    if (
-        selectedOption &&
-        currentValue &&
-        currentValue.toLowerCase() === String(selectedOption.name || "").trim().toLowerCase()
-    ) {
-        return "";
-    }
-
-    return currentValue;
-}
-
 function getSelectedOption(options, value) {
     return options.find((option) => option.value === value) || null;
 }
@@ -1284,7 +1270,6 @@ function resetSingleResult() {
     state.resultImageDataUrl = "";
     updatePreview(elements.resultPreview, elements.resultPlaceholder, "");
     elements.singleUploadS3Button.disabled = true;
-    setUploadStatus(elements.singleUploadStatus, "");
     setVisible(elements.singleDownloadSection, false);
 }
 
@@ -1319,17 +1304,12 @@ function updateStepVisibility() {
     const isSingle = state.mode === "single";
     const sourceReady = isSingle ? hasSingleSource() : hasBulkSource();
     const sceneReady = isSceneReady();
-    const showBakerySection =
-        !isSingle &&
-        !state.forcedBakeryId &&
-        (!state.bakeriesLoading || state.bakeriesLoaded || state.bakeriesFailed);
 
     setVisible(elements.singlePreviewSection, isSingle);
     setVisible(elements.bulkPreviewSection, !isSingle);
     setVisible(elements.singleControls, isSingle);
     setVisible(elements.bulkControls, !isSingle);
     setVisible(elements.modeSwitch, !state.forcedImageUrl && !state.forcedBulkMode);
-    setVisible(elements.bakerySection, showBakerySection);
 
     setVisible(
         elements.singleDropzoneWrap,
@@ -1337,10 +1317,6 @@ function updateStepVisibility() {
     );
     setVisible(elements.singleSourceSection, isSingle && hasSingleSource());
     setVisible(elements.singleResetButton, !state.forcedImageUrl);
-    setVisible(
-        elements.categorySection,
-        !isSingle && Boolean(elements.bakerySelect.value) && !state.bulkSelectionLoading,
-    );
     setVisible(elements.bulkSourceSection, !isSingle && hasBulkSource());
 
     setVisible(elements.sceneSection, sourceReady);
@@ -1473,8 +1449,8 @@ function handleImageUrlInput(value) {
     setStatus("");
 }
 
-async function fetchJson(url) {
-    const response = await fetch(buildInternalApiUrl(url));
+async function fetchJson(url, options = {}) {
+    const response = await fetch(buildInternalApiUrl(url), options);
     const payload = await response.json();
 
     if (!response.ok) {
@@ -1484,98 +1460,20 @@ async function fetchJson(url) {
     return payload;
 }
 
-async function ensureBakeriesLoaded() {
-    if (state.bakeriesLoaded) {
-        return;
-    }
-
-    setBakeriesLoading(true);
-    state.bakeriesFailed = false;
-
-    try {
-        const payload = await fetchJson("/api/bakeries");
-        state.bakeries = payload.bakeries || [];
-        state.filteredBakeries = [...state.bakeries];
-        filterBakeries(elements.bakerySearchInput.value);
-        syncBakerySearchInput();
-        state.bakeriesLoaded = true;
-    } catch (error) {
-        fillSelect(elements.bakerySelect, [], "Could not load bakeries");
-        elements.bakerySelect.disabled = true;
-        state.bakeriesFailed = true;
-        throw error;
-    } finally {
-        setBakeriesLoading(false);
-    }
-}
-
 async function bootstrapForcedBakerySelection() {
-    if (!state.forcedBakeryId) {
+    if (!state.forcedBakeryId || !state.forcedCategoryId) {
         return;
     }
 
     setBulkSelectionLoading(true);
 
     try {
-        await ensureBakeriesLoaded();
-
-        const matchingBakery = state.bakeries.find(
-            (bakery) => String(bakery.id) === String(state.forcedBakeryId),
+        await loadProducts(
+            String(state.forcedBakeryId).trim(),
+            String(state.forcedCategoryId).trim(),
         );
-
-        if (!matchingBakery) {
-            throw new Error("The requested bakery could not be found.");
-        }
-
-        elements.bakerySelect.value = String(matchingBakery.id);
-        syncBakerySearchInput();
-        await loadCategories(String(matchingBakery.id));
     } finally {
         setBulkSelectionLoading(false);
-    }
-}
-
-async function loadCategories(bakeryId) {
-    state.categories = [];
-    state.products = [];
-    state.selectedProductIds.clear();
-    elements.categorySelect.disabled = true;
-    fillSelect(elements.categorySelect, [], "Choose a category");
-    resetSceneSelections();
-    renderBulkSources();
-    renderBulkResults([]);
-    updateStepVisibility();
-
-    if (!bakeryId) {
-        return;
-    }
-
-    const payload = await fetchJson(`/api/categories?bakeryId=${encodeURIComponent(bakeryId)}`);
-    state.categories = payload.categories || [];
-    fillSelect(elements.categorySelect, state.categories, "Choose a category");
-    elements.categorySelect.disabled = false;
-    updateStepVisibility();
-
-    if (state.categories.length > 0) {
-        let selectedCategoryId = "";
-
-        for (const category of state.categories) {
-            // Try categories in order and keep the first one that actually has products.
-            // This makes the auto-selection feel intentional instead of landing on an empty state.
-            await loadProducts(bakeryId, String(category.id));
-
-            if (state.products.length > 0) {
-                selectedCategoryId = String(category.id);
-                break;
-            }
-        }
-
-        if (!selectedCategoryId) {
-            selectedCategoryId = String(state.categories[0].id);
-            await loadProducts(bakeryId, selectedCategoryId);
-        }
-
-        elements.categorySelect.value = selectedCategoryId;
     }
 }
 
@@ -1591,8 +1489,14 @@ async function loadProducts(bakeryId, categoryId) {
         return;
     }
 
+    const authToken = await requestBakeryAdminToken();
     const payload = await fetchJson(
         `/api/products?bakeryId=${encodeURIComponent(bakeryId)}&categoryId=${encodeURIComponent(categoryId)}`,
+        {
+            headers: {
+                "x-bakery-admin-token": authToken,
+            },
+        },
     );
     state.products = payload.products || [];
     state.products.forEach((product) => {
@@ -1649,9 +1553,6 @@ function renderBulkResults(results) {
 
     elements.bulkDownloadAllButton.disabled = successes.length === 0;
     elements.bulkUploadS3Button.disabled = successes.length === 0;
-    if (successes.length === 0) {
-        setUploadStatus(elements.bulkUploadStatus, "");
-    }
     setVisible(elements.bulkDownloadSection, successes.length > 0);
 
     if (successes.length === 0) {
@@ -1739,11 +1640,7 @@ function setMode(mode) {
     updateControlsLoadingOverlay();
 
     if (!isSingle) {
-        const bakeryBootstrap = state.forcedBakeryId
-            ? bootstrapForcedBakerySelection()
-            : ensureBakeriesLoaded();
-
-        bakeryBootstrap.catch((error) => {
+        bootstrapForcedBakerySelection().catch((error) => {
             setStatus(error.message, true);
         });
     }
@@ -1794,6 +1691,7 @@ async function generateSingle() {
                 prompt: elements.promptEditor.value,
                 preserveOrientation: elements.preserveOrientation.checked,
                 targetOrientation: state.targetOrientation,
+                token: state.embedToken,
             }),
         });
 
@@ -1825,8 +1723,8 @@ async function generateBulk() {
         state.selectedProductIds.has(product.id),
     );
 
-    if (!elements.bakerySelect.value || !elements.categorySelect.value) {
-        setStatus("Please choose a bakery and category first.", true);
+    if (!state.forcedBakeryId || !state.forcedCategoryId) {
+        setStatus("Category is required.", true);
         return;
     }
 
@@ -1861,6 +1759,7 @@ async function generateBulk() {
                 prompt: elements.promptEditor.value,
                 preserveOrientation: elements.preserveOrientation.checked,
                 targetOrientation: state.targetOrientation,
+                token: state.embedToken,
             }),
         });
 
@@ -1969,76 +1868,6 @@ elements.dropzone.addEventListener("drop", async (event) => {
     }
 
     setStatus("Could not read an image file or image URL from this drop.", true);
-});
-
-elements.bakerySelect.addEventListener("change", async (event) => {
-    try {
-        syncBakerySearchInput();
-        setBakeryDropdownOpen(false);
-        setBulkSelectionLoading(Boolean(event.target.value));
-        await loadCategories(event.target.value);
-    } catch (error) {
-        setStatus(error.message, true);
-    } finally {
-        setBulkSelectionLoading(false);
-    }
-});
-
-elements.bakerySearchInput.addEventListener("input", (event) => {
-    filterBakeries(event.target.value);
-    setBakeryDropdownOpen(true);
-});
-
-elements.bakerySearchInput.addEventListener("focus", () => {
-    if (!state.bakeriesLoading) {
-        filterBakeries(getBakeryDropdownSearchTerm());
-        setBakeryDropdownOpen(true);
-    }
-});
-
-elements.bakeryComboboxButton.addEventListener("click", () => {
-    if (state.bakeriesLoading || elements.bakerySelect.disabled) {
-        return;
-    }
-
-    filterBakeries(getBakeryDropdownSearchTerm());
-    setBakeryDropdownOpen(!state.bakeryDropdownOpen);
-});
-
-elements.bakeryDropdown.addEventListener("click", async (event) => {
-    const option = event.target.closest("[data-bakery-id]");
-
-    if (!option) {
-        return;
-    }
-
-    elements.bakerySelect.value = option.dataset.bakeryId;
-    syncBakerySearchInput();
-    renderBakeryDropdown();
-    setBakeryDropdownOpen(false);
-
-    try {
-        setBulkSelectionLoading(Boolean(elements.bakerySelect.value));
-        await loadCategories(elements.bakerySelect.value);
-    } catch (error) {
-        setStatus(error.message, true);
-    } finally {
-        setBulkSelectionLoading(false);
-    }
-});
-
-document.addEventListener("click", (event) => {
-    if (!elements.bakeryCombobox.contains(event.target)) {
-        setBakeryDropdownOpen(false);
-    }
-});
-
-elements.categorySelect.addEventListener("change", async (event) => {
-    try {
-        await loadProducts(elements.bakerySelect.value, event.target.value);
-    } catch (error) {
-        setStatus(error.message, true);
-    }
 });
 
 elements.selectAllProducts.addEventListener("change", (event) => {
@@ -2154,8 +1983,8 @@ elements.bulkDownloadAllButton.addEventListener("click", async () => {
 
     try {
         const generationDate = new Date().toISOString().slice(0, 10);
-        const bakeryName = getSelectedText(elements.bakerySelect) || "bakery";
-        const categoryName = getSelectedText(elements.categorySelect) || "category";
+        const bakeryName = state.forcedBakeryId || "bakery";
+        const categoryName = state.forcedCategoryId || "category";
         const archiveName = `${bakeryName}-${categoryName}-${generationDate}`
             .replace(/[<>:"/\\|?*\x00-\x1F]+/g, "-")
             .replace(/\s+/g, "-")
@@ -2250,7 +2079,7 @@ elements.bulkUploadS3Button.addEventListener("click", async () => {
             await uploadImageToS3({
                 imageDataUrl: item.imageDataUrl,
                 filenameBase: `${item.id || "item"}-${item.name || "generated-image"}`,
-                bakeryId: state.forcedBakeryId || elements.bakerySelect.value,
+                bakeryId: state.forcedBakeryId,
             });
         }
         showToast(
@@ -2277,6 +2106,33 @@ window.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
         closeLightbox();
     }
+});
+
+window.addEventListener("message", (event) => {
+    if (EMBED_CONFIG.parentOrigin !== "*" && event.origin !== EMBED_CONFIG.parentOrigin) {
+        return;
+    }
+
+    const data = event.data;
+
+    if (!data || data.type !== "provide-auth-token") {
+        return;
+    }
+
+    const token = String(data.token || "").trim();
+
+    if (!token) {
+        return;
+    }
+
+    if (typeof state.resolveBakeryAdminToken === "function") {
+        const resolver = state.resolveBakeryAdminToken;
+        state.resolveBakeryAdminToken = null;
+        resolver(token);
+        return;
+    }
+
+    state.bakeryAdminToken = token;
 });
 
 elements.generateButton.addEventListener("click", () => {

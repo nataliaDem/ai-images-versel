@@ -1,4 +1,6 @@
 const {
+    buildGenerationErrorPayload,
+    getVerifiedEmbedContext,
     generateImageDataUrl,
     readJsonBody,
     sendJson,
@@ -11,11 +13,17 @@ module.exports = async (req, res) => {
 
     try {
         const body = await readJsonBody(req);
-        const result = await generateImageDataUrl(body);
+        const embedContext = getVerifiedEmbedContext(req, body);
+        const result = await generateImageDataUrl({
+            ...body,
+            imageUrl: embedContext?.image_url || body.imageUrl,
+        });
         return sendJson(res, 200, result);
     } catch (error) {
-        return sendJson(res, 400, {
-            error: error.message || "Failed to generate image.",
-        });
+        return sendJson(
+            res,
+            400,
+            buildGenerationErrorPayload(error.message, "Failed to generate image."),
+        );
     }
 };

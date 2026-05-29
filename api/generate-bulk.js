@@ -1,4 +1,6 @@
 const {
+    buildGenerationErrorPayload,
+    getVerifiedEmbedContext,
     readJsonBody,
     sendJson,
     streamBulkImages,
@@ -11,6 +13,7 @@ module.exports = async (req, res) => {
 
     try {
         const body = await readJsonBody(req);
+        getVerifiedEmbedContext(req, body);
         res.statusCode = 200;
         res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
         res.setHeader("Cache-Control", "no-cache, no-transform");
@@ -40,16 +43,19 @@ module.exports = async (req, res) => {
         res.write(`${JSON.stringify({ type: "complete", results })}\n`);
         return res.end();
     } catch (error) {
+        const errorPayload = buildGenerationErrorPayload(
+            error.message,
+            "Failed to generate product batch.",
+        );
         if (!res.headersSent) {
-            return sendJson(res, 400, {
-                error: error.message || "Failed to generate product batch.",
-            });
+            return sendJson(res, 400, errorPayload);
         }
 
         res.write(
             `${JSON.stringify({
                 type: "error",
-                error: error.message || "Failed to generate product batch.",
+                error: errorPayload.error,
+                initial_error: errorPayload.initial_error,
             })}\n`,
         );
         return res.end();

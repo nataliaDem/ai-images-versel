@@ -1,4 +1,5 @@
 const {
+    getVerifiedEmbedContext,
     normalizeAppEnvironment,
     readJsonBody,
     sendJson,
@@ -12,11 +13,12 @@ module.exports = async (req, res) => {
 
     try {
         const body = await readJsonBody(req);
+        const embedContext = getVerifiedEmbedContext(req, body);
         const uploaded = await uploadSingleResultToS3({
             imageDataUrl: body.imageDataUrl,
             filenameBase: body.filenameBase,
-            bakeryId: body.bakeryId,
-            environment: normalizeAppEnvironment(body.env),
+            bakeryId: embedContext?.bakery_id || body.bakeryId,
+            environment: normalizeAppEnvironment(embedContext?.env || body.env),
         });
 
         return sendJson(res, 200, { uploaded });

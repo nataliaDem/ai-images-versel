@@ -112,32 +112,6 @@
                     </div>
 
                     <div id="bulkControls" class="mode-panel">
-                        <div id="bakerySection" class="field-group is-hidden">
-                            <label for="bakerySelect">Bakery</label>
-                            <div id="bakeryCombobox" class="search-select">
-                                <input
-                                    id="bakerySearchInput"
-                                    class="search-select-input"
-                                    type="text"
-                                    placeholder="Choose a bakery"
-                                    autocomplete="off"
-                                />
-                                <button
-                                    id="bakeryComboboxButton"
-                                    class="search-select-toggle"
-                                    type="button"
-                                    aria-label="Toggle bakery list"
-                                ></button>
-                                <div
-                                    id="bakeryDropdown"
-                                    class="search-select-dropdown is-hidden"
-                                ></div>
-                            </div>
-                            <select id="bakerySelect" class="visually-hidden" disabled>
-                                <option value="">Loading bakeries...</option>
-                            </select>
-                        </div>
-
                         <div
                             id="bulkSelectionLoader"
                             class="inline-loader is-hidden"
@@ -146,13 +120,6 @@
                             <div class="inline-loader-text">
                                 Loading categories and products
                             </div>
-                        </div>
-
-                        <div id="categorySection" class="field-group is-hidden">
-                            <label for="categorySelect">Category</label>
-                            <select id="categorySelect" disabled>
-                                <option value="">Choose a category</option>
-                            </select>
                         </div>
 
                         <div
@@ -358,7 +325,6 @@
                                 <p class="bulk-download-note">
                                     Be sure to save the generated image so you do not lose it.
                                 </p>
-                                <p id="singleUploadStatus" class="upload-status is-hidden"></p>
                             </div>
                         </div>
                     </div>
@@ -416,7 +382,6 @@
                                 <p class="bulk-download-note">
                                     Be sure to save the generated images so you do not lose them.
                                 </p>
-                                <p id="bulkUploadStatus" class="upload-status is-hidden"></p>
                             </div>
                         </div>
                     </div>

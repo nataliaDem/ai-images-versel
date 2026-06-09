@@ -1,5 +1,6 @@
 const {
     readJsonBody,
+    resolveSlackImageUrl,
     sendJson,
     streamBulkImages,
 } = require("../lib/image-ui-backend");
@@ -14,6 +15,8 @@ module.exports = async (req, res) => {
 
     try {
         body = await readJsonBody(req);
+        const chunkStart = Number(body.chunkStart || 0);
+        const totalItems = Number(body.totalItems || (Array.isArray(body.items) ? body.items.length : 0));
         res.statusCode = 200;
         res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
         res.setHeader("Cache-Control", "no-cache, no-transform");
@@ -28,7 +31,7 @@ module.exports = async (req, res) => {
 
         const results = await streamBulkImages({
             ...body,
-            onResult({ index, total, result }) {
+            async onResult({ index, total, result }) {
                 res.write(
                     `${JSON.stringify({
                         type: "result",
@@ -37,33 +40,54 @@ module.exports = async (req, res) => {
                         result,
                     })}\n`,
                 );
+
+                const absoluteItemNumber = chunkStart + index + 1;
+                let previewItems = [];
+
+                try {
+                    if (result?.imageDataUrl || result?.imageUrl) {
+                        const resultUrl = result?.imageDataUrl
+                            ? await resolveSlackImageUrl({
+                                imageDataUrl: result.imageDataUrl,
+                                filenameBase: `${result.id || result.name || "bulk"}-result`,
+                                bakeryId: body.bakeryId,
+                                environment: body.env,
+                                variant: "result",
+                            })
+                            : "";
+
+                        previewItems = [
+                            {
+                                label: result.name || result.id || "Generated item",
+                                sourceUrl: result.imageUrl || "",
+                                resultUrl,
+                            },
+                        ];
+                    }
+                } catch (previewError) {
+                    console.error(
+                        "Could not prepare Slack preview URLs for bulk generation item:",
+                        previewError,
+                    );
+                }
+
+                await notifyGenerationEvent({
+                    mode: "bulk",
+                    status: result?.error ? "error" : "success",
+                    environment: body.env,
+                    bakeryId: body.bakeryId,
+                    bakeryName: body.bakeryName,
+                    categoryId: body.categoryId,
+                    categoryName: body.categoryName,
+                    itemProgress: `${absoluteItemNumber} of ${totalItems}`,
+                    itemName: result?.name || result?.id || "",
+                    preserveOrientation: body.preserveOrientation !== false ? "yes" : "no",
+                    targetOrientation: body.targetOrientation,
+                    sourceType: result?.imageUrl ? "image_url" : "image_upload",
+                    previewItems,
+                    errorMessage: result?.error || "",
+                });
             },
-        });
-
-        const failedItems = results.filter((item) => item?.error);
-
-        await notifyGenerationEvent({
-            mode: "bulk",
-            status: failedItems.length > 0 ? "error" : "success",
-            environment: body.env,
-            bakeryId: body.bakeryId,
-            bakeryName: body.bakeryName,
-            categoryId: body.categoryId,
-            categoryName: body.categoryName,
-            itemCount: Array.isArray(body.items) ? body.items.length : 0,
-            successCount: results.filter((item) => item?.imageDataUrl).length,
-            errorCount: failedItems.length,
-            preserveOrientation: body.preserveOrientation !== false ? "yes" : "no",
-            targetOrientation: body.targetOrientation,
-            failedItems: failedItems.map((item) => ({
-                id: item.id,
-                name: item.name,
-                error: item.error,
-            })),
-            errorMessage:
-                failedItems.length > 0
-                    ? `${failedItems.length} of ${results.length} items failed to generate.`
-                    : "",
         });
 
         res.write(`${JSON.stringify({ type: "complete", results })}\n`);

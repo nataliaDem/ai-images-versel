@@ -1,6 +1,7 @@
 const {
     generateImageDataUrl,
     readJsonBody,
+    resolveSlackImageUrl,
     sendJson,
 } = require("../lib/image-ui-backend");
 const { notifyGenerationEvent } = require("../lib/slack-notifier");
@@ -15,6 +16,39 @@ module.exports = async (req, res) => {
     try {
         body = await readJsonBody(req);
         const result = await generateImageDataUrl(body);
+        let previewItems = [];
+
+        try {
+            const [sourceUrl, resultUrl] = await Promise.all([
+                resolveSlackImageUrl({
+                    imageDataUrl: body.imageDataUrl,
+                    imageUrl: body.imageUrl,
+                    filenameBase: `${body.filenameBase || "single"}-source`,
+                    bakeryId: body.bakeryId,
+                    environment: body.env,
+                    variant: "source",
+                }),
+                resolveSlackImageUrl({
+                    imageDataUrl: result.imageDataUrl,
+                    filenameBase: `${body.filenameBase || "single"}-result`,
+                    bakeryId: body.bakeryId,
+                    environment: body.env,
+                    variant: "result",
+                }),
+            ]);
+
+            if (sourceUrl || resultUrl) {
+                previewItems = [
+                    {
+                        label: body.filenameBase || "Generated image",
+                        sourceUrl,
+                        resultUrl,
+                    },
+                ];
+            }
+        } catch (previewError) {
+            console.error("Could not prepare Slack preview URLs for single generation:", previewError);
+        }
 
         await notifyGenerationEvent({
             mode: "single",
@@ -30,6 +64,7 @@ module.exports = async (req, res) => {
             preserveOrientation: body.preserveOrientation !== false ? "yes" : "no",
             targetOrientation: body.targetOrientation,
             sourceType: body.imageUrl ? "image_url" : "image_upload",
+            previewItems,
         });
 
         return sendJson(res, 200, result);

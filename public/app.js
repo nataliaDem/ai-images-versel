@@ -1820,6 +1820,7 @@ async function generateSingle() {
             body: JSON.stringify({
                 imageDataUrl: state.sourceImageDataUrl,
                 imageUrl: state.sourceImageUrl,
+                filenameBase: state.uploadedFileName || "single-image",
                 bakeryId: state.forcedBakeryId || "",
                 bakeryName: "",
                 categoryId: "",
@@ -1860,6 +1861,8 @@ async function generateBulkChunk({
     bakeryName,
     categoryId,
     categoryName,
+    chunkStart,
+    totalItems,
     onResult,
 }) {
     const response = await fetch("/api/generate-bulk", {
@@ -1872,6 +1875,8 @@ async function generateBulkChunk({
             bakeryName,
             categoryId,
             categoryName,
+            chunkStart,
+            totalItems,
             env: state.appEnvironment,
             items: items.map((product) => ({
                 id: product.id,
@@ -1962,6 +1967,8 @@ async function generateBulk() {
                 bakeryName,
                 categoryId,
                 categoryName,
+                chunkStart,
+                totalItems: selectedItems.length,
                 onResult(chunkIndex, result) {
                     progressiveResults[chunkStart + chunkIndex] = result;
                     renderBulkResults(progressiveResults.filter(Boolean));

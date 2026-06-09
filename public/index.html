@@ -32,7 +32,16 @@
             </header>
 
             <section id="appGuard" class="panel app-guard is-hidden">
-                <h2>Unavailable</h2>
+                <h2 id="appGuardTitle">Access blocked</h2>
+                <p id="appGuardMessage">You do not have access to this app.</p>
+            </section>
+
+            <section id="authLoading" class="panel app-guard">
+                <div class="auth-loading-stack">
+                    <div class="inline-loader-spinner" aria-hidden="true"></div>
+                    <h2 id="authLoadingTitle">Loading</h2>
+                    <p id="authLoadingMessage">Please wait.</p>
+                </div>
             </section>
 
             <main id="workspace" class="workspace">

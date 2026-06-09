@@ -1,6 +1,11 @@
 const elements = {
     workspace: document.getElementById("workspace"),
     appGuard: document.getElementById("appGuard"),
+    appGuardTitle: document.getElementById("appGuardTitle"),
+    appGuardMessage: document.getElementById("appGuardMessage"),
+    authLoading: document.getElementById("authLoading"),
+    authLoadingTitle: document.getElementById("authLoadingTitle"),
+    authLoadingMessage: document.getElementById("authLoadingMessage"),
     modeSwitch: document.getElementById("modeSwitch"),
     singleModeButton: document.getElementById("singleModeButton"),
     bulkModeButton: document.getElementById("bulkModeButton"),
@@ -300,12 +305,18 @@ const SCENE_PRESETS = [
 const EMBED_CONFIG = (() => {
     const params = new URLSearchParams(window.location.search);
     const envParam = params.get("env")?.trim().toLowerCase();
+    const defaultParentOrigin =
+        window.location.hostname === "localhost"
+            ? "http://localhost:4200"
+            : "https://admin.cakeiteasy.com";
+
     return {
         bakeryId: params.get("bakery_id")?.trim() || "",
+        categoryId: params.get("category_id")?.trim() || "",
         bulkMode: params.get("bulk") === "true",
         environment: envParam === "stage" ? "stage" : "production",
         imageUrl: params.get("image_url")?.trim() || "",
-        parentOrigin: params.get("parent_origin")?.trim() || "*",
+        parentOrigin: params.get("parent_origin")?.trim() || defaultParentOrigin,
     };
 })();
 
@@ -331,12 +342,18 @@ const state = {
     bakeriesFailed: false,
     bakeryDropdownOpen: false,
     forcedBakeryId: EMBED_CONFIG.bakeryId,
+    forcedCategoryId: EMBED_CONFIG.categoryId,
     forcedImageUrl: EMBED_CONFIG.imageUrl,
     forcedBulkMode: EMBED_CONFIG.bulkMode && Boolean(EMBED_CONFIG.bakeryId),
     appEnvironment: EMBED_CONFIG.environment,
     selectedScenePresetId: SCENE_PRESETS[0].id,
     sceneCustomizeOpen: false,
     targetOrientation: "horizontal",
+    authToken: "",
+    authTokenRequest: null,
+    currentUser: null,
+    currentUserName: "",
+    accessValidated: false,
 };
 
 const STORAGE_KEYS = {
@@ -389,6 +406,130 @@ function buildInternalApiUrl(pathname, query = {}) {
     });
 
     return `${url.pathname}${url.search}`;
+}
+
+function getParentOrigin() {
+    return EMBED_CONFIG.parentOrigin || "";
+}
+
+function requestAuthToken() {
+    const parentOrigin = getParentOrigin();
+
+    if (!parentOrigin || !window.parent || window.parent === window) {
+        return Promise.resolve("");
+    }
+
+    return new Promise((resolve, reject) => {
+        const timeout = window.setTimeout(() => {
+            window.removeEventListener("message", onMessage);
+            reject(new Error("Auth token request timed out."));
+        }, 10_000);
+
+        function onMessage(event) {
+            if (event.origin !== parentOrigin) {
+                return;
+            }
+
+            const data = event.data;
+
+            if (data?.type === "provide-auth-token" && data?.token) {
+                window.clearTimeout(timeout);
+                window.removeEventListener("message", onMessage);
+                resolve(data.token);
+            }
+        }
+
+        window.addEventListener("message", onMessage);
+        window.parent.postMessage(
+            {
+                source: "ai-images-app",
+                type: "request-auth-token",
+            },
+            parentOrigin,
+        );
+    });
+}
+
+async function getAuthToken() {
+    if (state.authToken) {
+        return state.authToken;
+    }
+
+    if (!state.authTokenRequest) {
+        state.authTokenRequest = requestAuthToken()
+            .then((token) => {
+                state.authToken = token || "";
+                return state.authToken;
+            })
+            .catch((error) => {
+                console.warn("Could not get auth token from parent frame.", error);
+                return "";
+            })
+            .finally(() => {
+                state.authTokenRequest = null;
+            });
+    }
+
+    return state.authTokenRequest;
+}
+
+function formatUserName(user) {
+    const firstName = String(user?.first_name || "").trim();
+    const lastName = String(user?.last_name || "").trim();
+    const email = String(user?.email || "").trim();
+    const fullName = [firstName, lastName].filter(Boolean).join(" ");
+
+    if (fullName && email) {
+        return `${fullName} (${email})`;
+    }
+
+    return fullName || email;
+}
+
+async function loadCurrentUser() {
+    const token = await getAuthToken();
+
+    if (!token) {
+        throw new Error("Missing auth token.");
+    }
+
+    const response = await fetch(buildInternalApiUrl("/api/bakery-admin-info"), {
+        headers: await buildAuthHeaders(),
+    });
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok || !payload?.user) {
+        throw new Error(payload?.error || "Could not validate bakery admin user.");
+    }
+
+    const userName = formatUserName(payload.user);
+
+    if (!userName) {
+        throw new Error("Bakery admin user is missing a name.");
+    }
+
+    state.currentUser = payload.user;
+    state.currentUserName = userName;
+    state.accessValidated = true;
+}
+
+function ensureAccessValidated() {
+    if (!state.accessValidated || !state.authToken || !state.currentUser) {
+        throw new Error("Access blocked.");
+    }
+}
+
+async function buildAuthHeaders(headers = {}) {
+    const token = await getAuthToken();
+
+    if (!token) {
+        throw new Error("Missing auth token.");
+    }
+
+    return {
+        ...headers,
+        Authorization: `JWT ${token}`,
+    };
 }
 
 function normalizeGenerationErrorMessage(status, rawMessage = "") {
@@ -488,6 +629,32 @@ function setVisible(element, isVisible) {
     element.classList.toggle("is-hidden", !isVisible);
 }
 
+function showAppGuard(title, message = "") {
+    elements.appGuardTitle.textContent = title || "Access blocked";
+    elements.appGuardMessage.textContent = message || "";
+    setVisible(elements.authLoading, false);
+    setVisible(elements.workspace, false);
+    setVisible(elements.appGuard, true);
+}
+
+function hideAppGuard() {
+    setVisible(elements.appGuard, false);
+    setVisible(elements.workspace, true);
+}
+
+function showAuthLoading(title = "Loading", message = "") {
+    elements.authLoadingTitle.textContent = title;
+    elements.authLoadingMessage.textContent =
+        message || "Please wait.";
+    setVisible(elements.workspace, false);
+    setVisible(elements.appGuard, false);
+    setVisible(elements.authLoading, true);
+}
+
+function hideAuthLoading() {
+    setVisible(elements.authLoading, false);
+}
+
 function postMessageToParent(type, payload = {}) {
     if (window.parent && window.parent !== window) {
         window.parent.postMessage(
@@ -496,9 +663,26 @@ function postMessageToParent(type, payload = {}) {
                 type,
                 ...payload,
             },
-            EMBED_CONFIG.parentOrigin || "*",
+            getParentOrigin(),
         );
     }
+}
+
+function getCurrentCategoryId() {
+    return state.forcedCategoryId || elements.categorySelect.value || "";
+}
+
+function getCurrentCategoryName() {
+    return getSelectedText(elements.categorySelect) || "";
+}
+
+function getCurrentBakeryName() {
+    const selectedBakeryId = state.forcedBakeryId || elements.bakerySelect.value || "";
+    const matchingBakery = state.bakeries.find(
+        (bakery) => String(bakery.id) === String(selectedBakeryId),
+    );
+
+    return matchingBakery?.name || getSelectedText(elements.bakerySelect) || "";
 }
 
 function formatUsdAmount(amount) {
@@ -606,11 +790,13 @@ async function uploadImageToS3({
     sourceType = "",
     notifySlack = true,
 }) {
+    ensureAccessValidated();
+
     const response = await fetch("/api/upload-single-s3", {
         method: "POST",
-        headers: {
+        headers: await buildAuthHeaders({
             "Content-Type": "application/json",
-        },
+        }),
         body: JSON.stringify({
             imageDataUrl,
             filenameBase,
@@ -621,6 +807,7 @@ async function uploadImageToS3({
             mode,
             sourceType,
             notifySlack,
+            userName: state.currentUserName,
             env: state.appEnvironment,
         }),
     });
@@ -641,13 +828,15 @@ async function uploadImageToS3({
 
 async function notifyAction(payload) {
     try {
+        ensureAccessValidated();
         await fetch("/api/notify-action", {
             method: "POST",
-            headers: {
+            headers: await buildAuthHeaders({
                 "Content-Type": "application/json",
-            },
+            }),
             body: JSON.stringify({
                 ...payload,
+                userName: state.currentUserName,
                 env: state.appEnvironment,
             }),
         });
@@ -949,7 +1138,7 @@ async function storeBulkGeneration(results) {
         id,
         date,
         bakeryId: elements.bakerySelect.value || "",
-        categoryId: elements.categorySelect.value || "",
+        categoryId: getCurrentCategoryId(),
         results,
     });
 
@@ -957,7 +1146,7 @@ async function storeBulkGeneration(results) {
         id,
         date,
         bakeryId: elements.bakerySelect.value || "",
-        categoryId: elements.categorySelect.value || "",
+        categoryId: getCurrentCategoryId(),
         resultCount: Array.isArray(results) ? results.length : 0,
     });
 }
@@ -1368,7 +1557,10 @@ function updateStepVisibility() {
     setVisible(elements.singleResetButton, !state.forcedImageUrl);
     setVisible(
         elements.categorySection,
-        !isSingle && Boolean(elements.bakerySelect.value) && !state.bulkSelectionLoading,
+        !isSingle &&
+            !state.forcedCategoryId &&
+            Boolean(elements.bakerySelect.value) &&
+            !state.bulkSelectionLoading,
     );
     setVisible(elements.bulkSourceSection, !isSingle && hasBulkSource());
 
@@ -1503,7 +1695,10 @@ function handleImageUrlInput(value) {
 }
 
 async function fetchJson(url) {
-    const response = await fetch(buildInternalApiUrl(url));
+    ensureAccessValidated();
+    const response = await fetch(buildInternalApiUrl(url), {
+        headers: await buildAuthHeaders(),
+    });
     const payload = await response.json();
 
     if (!response.ok) {
@@ -1522,8 +1717,15 @@ async function ensureBakeriesLoaded() {
     state.bakeriesFailed = false;
 
     try {
-        const payload = await fetchJson("/api/bakeries");
-        state.bakeries = payload.bakeries || [];
+        const userBakeries = Array.isArray(state.currentUser?.bakeries)
+            ? state.currentUser.bakeries
+            : [];
+        state.bakeries = userBakeries
+            .map((bakery) => ({
+                id: bakery.id,
+                name: bakery.name,
+            }))
+            .filter((bakery) => bakery.id && bakery.name);
         state.filteredBakeries = [...state.bakeries];
         filterBakeries(elements.bakerySearchInput.value);
         syncBakerySearchInput();
@@ -1584,6 +1786,20 @@ async function loadCategories(bakeryId) {
     fillSelect(elements.categorySelect, state.categories, "Choose a category");
     elements.categorySelect.disabled = false;
     updateStepVisibility();
+
+    if (state.forcedCategoryId) {
+        const matchingCategory = state.categories.find(
+            (category) => String(category.id) === String(state.forcedCategoryId),
+        );
+
+        if (!matchingCategory) {
+            throw new Error("The requested category could not be found.");
+        }
+
+        elements.categorySelect.value = String(matchingCategory.id);
+        await loadProducts(bakeryId, String(matchingCategory.id));
+        return;
+    }
 
     if (state.categories.length > 0) {
         let selectedCategoryId = "";
@@ -1812,11 +2028,12 @@ async function generateSingle() {
     setStatus("");
 
     try {
+        ensureAccessValidated();
         const response = await fetch("/api/generate", {
             method: "POST",
-            headers: {
+            headers: await buildAuthHeaders({
                 "Content-Type": "application/json",
-            },
+            }),
             body: JSON.stringify({
                 imageDataUrl: state.sourceImageDataUrl,
                 imageUrl: state.sourceImageUrl,
@@ -1825,6 +2042,7 @@ async function generateSingle() {
                 bakeryName: "",
                 categoryId: "",
                 categoryName: "",
+                userName: state.currentUserName,
                 env: state.appEnvironment,
                 prompt: elements.promptEditor.value,
                 preserveOrientation: elements.preserveOrientation.checked,
@@ -1865,16 +2083,19 @@ async function generateBulkChunk({
     totalItems,
     onResult,
 }) {
+    ensureAccessValidated();
+
     const response = await fetch("/api/generate-bulk", {
         method: "POST",
-        headers: {
+        headers: await buildAuthHeaders({
             "Content-Type": "application/json",
-        },
+        }),
         body: JSON.stringify({
             bakeryId,
             bakeryName,
             categoryId,
             categoryName,
+            userName: state.currentUserName,
             chunkStart,
             totalItems,
             env: state.appEnvironment,
@@ -1923,11 +2144,11 @@ async function generateBulk() {
         state.selectedProductIds.has(product.id),
     );
     const bakeryId = state.forcedBakeryId || elements.bakerySelect.value;
-    const bakeryName = getSelectedText(elements.bakerySelect) || "";
-    const categoryId = elements.categorySelect.value;
-    const categoryName = getSelectedText(elements.categorySelect) || "";
+    const bakeryName = getCurrentBakeryName();
+    const categoryId = getCurrentCategoryId();
+    const categoryName = getCurrentCategoryName();
 
-    if (!elements.bakerySelect.value || !elements.categorySelect.value) {
+    if (!elements.bakerySelect.value || !categoryId) {
         setStatus("Please choose a bakery and category first.", true);
         return;
     }
@@ -2242,8 +2463,8 @@ elements.bulkDownloadAllButton.addEventListener("click", async () => {
 
     try {
         const generationDate = new Date().toISOString().slice(0, 10);
-        const bakeryName = getSelectedText(elements.bakerySelect) || "bakery";
-        const categoryName = getSelectedText(elements.categorySelect) || "category";
+        const bakeryName = getCurrentBakeryName() || "bakery";
+        const categoryName = getCurrentCategoryName() || "category";
         const archiveName = `${bakeryName}-${categoryName}-${generationDate}`
             .replace(/[<>:"/\\|?*\x00-\x1F]+/g, "-")
             .replace(/\s+/g, "-")
@@ -2281,7 +2502,7 @@ elements.bulkDownloadAllButton.addEventListener("click", async () => {
             mode: "bulk",
             bakeryId: state.forcedBakeryId || elements.bakerySelect.value,
             bakeryName,
-            categoryId: elements.categorySelect.value,
+            categoryId: getCurrentCategoryId(),
             categoryName,
             itemCount: successes.length,
             successCount: successes.length,
@@ -2297,9 +2518,9 @@ elements.bulkDownloadAllButton.addEventListener("click", async () => {
             status: "error",
             mode: "bulk",
             bakeryId: state.forcedBakeryId || elements.bakerySelect.value,
-            bakeryName: getSelectedText(elements.bakerySelect) || "",
-            categoryId: elements.categorySelect.value,
-            categoryName: getSelectedText(elements.categorySelect) || "",
+            bakeryName: getCurrentBakeryName(),
+            categoryId: getCurrentCategoryId(),
+            categoryName: getCurrentCategoryName() || "",
             itemCount: successes.length,
             successCount: 0,
             errorCount: successes.length || 1,
@@ -2357,9 +2578,9 @@ elements.singleUploadS3Button.addEventListener("click", async () => {
 elements.bulkUploadS3Button.addEventListener("click", async () => {
     const successes = state.bulkResults.filter((item) => item.imageDataUrl);
     const bakeryId = state.forcedBakeryId || elements.bakerySelect.value;
-    const bakeryName = getSelectedText(elements.bakerySelect) || "";
-    const categoryId = elements.categorySelect.value;
-    const categoryName = getSelectedText(elements.categorySelect) || "";
+    const bakeryName = getCurrentBakeryName();
+    const categoryId = getCurrentCategoryId();
+    const categoryName = getCurrentCategoryName();
 
     if (successes.length === 0) {
         setStatus("There are no generated results to upload yet.", true);
@@ -2498,6 +2719,24 @@ renderBulkSources();
 renderBulkResults([]);
 updateSelectAllProductsLabel();
 
-bootstrapForcedImageSelection();
-setMode(state.mode);
-setStatus("");
+setVisible(elements.workspace, false);
+setVisible(elements.appGuard, false);
+showAuthLoading();
+
+async function initializeApp() {
+    try {
+        showAuthLoading();
+        await loadCurrentUser();
+        hideAuthLoading();
+        hideAppGuard();
+        bootstrapForcedImageSelection();
+        setMode(state.mode);
+        setStatus("");
+    } catch (error) {
+        hideAuthLoading();
+        showAppGuard("Access blocked", error.message || "You do not have access to this app.");
+        setStatus("");
+    }
+}
+
+initializeApp();

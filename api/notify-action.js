@@ -14,6 +14,7 @@ module.exports = async (req, res) => {
             status: body.status || "success",
             mode: body.mode || "single",
             environment: normalizeAppEnvironment(body.env),
+            userName: body.userName,
             bakeryId: body.bakeryId,
             bakeryName: body.bakeryName,
             categoryId: body.categoryId,

@@ -59,6 +59,7 @@ const elements = {
     singleUploadS3Button: document.getElementById("singleUploadS3Button"),
     singleUploadButtonLabel: document.getElementById("singleUploadButtonLabel"),
     singleUploadButtonText: document.getElementById("singleUploadButtonText"),
+    singleUploadNote: document.getElementById("singleUploadNote"),
     singleUploadStatus: document.getElementById("singleUploadStatus"),
     singleDownloadSection: document.getElementById("singleDownloadSection"),
     sourcePreview: document.getElementById("sourcePreview"),
@@ -73,6 +74,7 @@ const elements = {
     bulkDownloadAllButton: document.getElementById("bulkDownloadAllButton"),
     bulkUploadS3Button: document.getElementById("bulkUploadS3Button"),
     bulkUploadButtonText: document.getElementById("bulkUploadButtonText"),
+    bulkUploadNote: document.getElementById("bulkUploadNote"),
     bulkUploadStatus: document.getElementById("bulkUploadStatus"),
     bulkDownloadSection: document.getElementById("bulkDownloadSection"),
     bulkErrors: document.getElementById("bulkErrors"),
@@ -619,10 +621,14 @@ function setButtonLoading(button, isLoading, loadingText = "Uploading...") {
 function syncUploadButtonLabels() {
     if (state.forcedImageUrl) {
         elements.singleUploadButtonLabel.textContent = "Set as product image";
+        elements.singleUploadNote.textContent =
+            "The image will be added to the product image gallery last.";
         return;
     }
 
     elements.singleUploadButtonLabel.textContent = "Upload to gallery";
+    elements.singleUploadNote.textContent =
+        "Be sure to save the generated image so you do not lose it.";
 }
 
 function setVisible(element, isVisible) {

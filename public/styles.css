@@ -1139,10 +1139,6 @@ body.embed-mode #singleUploadS3Button {
     min-width: 220px;
 }
 
-body.embed-mode #singleDownloadSection .bulk-download-note {
-    display: none;
-}
-
 .bulk-download-all-button {
     padding: 14px 18px;
     font-size: 14px;

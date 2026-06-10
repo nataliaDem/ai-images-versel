@@ -618,11 +618,15 @@ function setButtonLoading(button, isLoading, loadingText = "Uploading...") {
     loading?.classList.toggle("is-hidden", !isLoading);
 }
 
+function isProductGalleryFlow() {
+    return Boolean(state.forcedImageUrl || state.forcedBakeryId);
+}
+
 function syncUploadButtonLabels() {
-    if (state.forcedImageUrl) {
+    if (isProductGalleryFlow()) {
         elements.singleUploadButtonLabel.textContent = "Set as product image";
         elements.singleUploadNote.textContent =
-            "The image will be added to the product image gallery last.";
+            "By setting as product image, it will be added to the product image gallery last.";
         return;
     }
 

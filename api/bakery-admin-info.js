@@ -1,5 +1,5 @@
 const {
-    listBakeries,
+    getBakeryAdminInfo,
     normalizeAppEnvironment,
     sendJson,
 } = require("../lib/image-ui-backend");
@@ -11,14 +11,14 @@ module.exports = async (req, res) => {
 
     try {
         const environment = normalizeAppEnvironment(req.query?.env);
-        const bakeries = await listBakeries(
+        const user = await getBakeryAdminInfo(
             environment,
             req.headers?.authorization || "",
         );
-        return sendJson(res, 200, { bakeries });
+        return sendJson(res, 200, { user });
     } catch (error) {
-        return sendJson(res, 400, {
-            error: error.message || "Failed to load bakeries.",
+        return sendJson(res, 401, {
+            error: error.message || "Failed to load bakery admin info.",
         });
     }
 };

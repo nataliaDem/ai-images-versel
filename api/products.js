@@ -18,7 +18,12 @@ module.exports = async (req, res) => {
             throw new Error("bakeryId and categoryId are required.");
         }
 
-        const products = await listProducts(bakeryId, categoryId, environment);
+        const products = await listProducts(
+            bakeryId,
+            categoryId,
+            environment,
+            req.headers?.authorization || "",
+        );
         return sendJson(res, 200, { products });
     } catch (error) {
         return sendJson(res, 400, {

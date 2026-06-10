@@ -104,9 +104,22 @@ body.embed-mode .hero {
     text-align: center;
 }
 
+.auth-loading-stack {
+    display: grid;
+    justify-items: center;
+    gap: 12px;
+    min-height: 180px;
+    align-content: center;
+}
+
 .app-guard h2 {
     margin: 0;
     font-size: 20px;
+}
+
+.app-guard p {
+    margin: 0;
+    color: var(--muted);
 }
 
 .panel {
@@ -973,7 +986,7 @@ body.embed-mode .preview-frame-compact img {
 #bulkSourcesGrid {
     grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 6px;
-    max-height: 320px;
+    max-height: 200px;
 }
 
 #bulkResultsGrid {
@@ -1124,10 +1137,6 @@ body.embed-mode .preview-frame-compact img {
 body.embed-mode #singleUploadS3Button {
     position: static;
     min-width: 220px;
-}
-
-body.embed-mode #singleDownloadSection .bulk-download-note {
-    display: none;
 }
 
 .bulk-download-all-button {

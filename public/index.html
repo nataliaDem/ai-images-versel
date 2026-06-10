@@ -32,7 +32,16 @@
             </header>
 
             <section id="appGuard" class="panel app-guard is-hidden">
-                <h2>Unavailable</h2>
+                <h2 id="appGuardTitle">Access blocked</h2>
+                <p id="appGuardMessage">You do not have access to this app.</p>
+            </section>
+
+            <section id="authLoading" class="panel app-guard">
+                <div class="auth-loading-stack">
+                    <div class="inline-loader-spinner" aria-hidden="true"></div>
+                    <h2 id="authLoadingTitle">Loading</h2>
+                    <p id="authLoadingMessage">Please wait.</p>
+                </div>
             </section>
 
             <main id="workspace" class="workspace">
@@ -340,7 +349,7 @@
                                         class="outline-button preview-download-button"
                                         disabled
                                     >
-                                        Download result
+                                        Download to your device
                                     </button>
                                     <button
                                         id="singleUploadS3Button"
@@ -355,7 +364,7 @@
                                         </span>
                                     </button>
                                 </div>
-                                <p class="bulk-download-note">
+                                <p id="singleUploadNote" class="bulk-download-note">
                                     Be sure to save the generated image so you do not lose it.
                                 </p>
                                 <p id="singleUploadStatus" class="upload-status is-hidden"></p>
@@ -398,7 +407,7 @@
                                         type="button"
                                         disabled
                                     >
-                                        Download all
+                                        Download all to your device
                                     </button>
                                     <button
                                         id="bulkUploadS3Button"
@@ -406,15 +415,15 @@
                                         type="button"
                                         disabled
                                     >
-                                        <span class="button-label">Upload all to gallery</span>
+                                        <span class="button-label">Upload all to AI library</span>
                                         <span class="button-loading is-hidden">
                                             <span class="button-spinner" aria-hidden="true"></span>
                                             <span id="bulkUploadButtonText">Uploading...</span>
                                         </span>
                                     </button>
                                 </div>
-                                <p class="bulk-download-note">
-                                    Be sure to save the generated images so you do not lose them.
+                                <p id="bulkUploadNote" class="bulk-download-note">
+                                    After uploading, you will be able to find these images in the library when uploading images in the product builder.
                                 </p>
                                 <p id="bulkUploadStatus" class="upload-status is-hidden"></p>
                             </div>

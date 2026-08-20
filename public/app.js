@@ -310,7 +310,7 @@ const EMBED_CONFIG = (() => {
     const defaultParentOrigin =
         window.location.hostname === "localhost"
             ? "http://localhost:4200"
-            : "https://admin.cakeiteasy.com";
+            : "https://admin.foodspace.io";
 
     return {
         bakeryId: params.get("bakery_id")?.trim() || "",

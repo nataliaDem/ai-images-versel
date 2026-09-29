@@ -532,7 +532,7 @@ async function buildAuthHeaders(headers = {}) {
 
     return {
         ...headers,
-        Authorization: `JWT ${token}`,
+        Authorization: `Bearer ${token}`,
     };
 }
 

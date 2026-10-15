@@ -46,10 +46,21 @@ When the app runs on `localhost`, it expects the parent frame to be the bakery a
 `http://localhost:4200` (override with the `parent_origin` query param).
 
 1. Start this app with `vercel dev --listen 3000`.
-2. In `web.bakery-admin`, temporarily set `AI_IMAGES_APP_URL` to `'http://localhost:3000/'` in
-   `improve-product-image-modal.component.ts` (single image) and
-   `improve-images-bulk-modal.component.ts` (bulk). Do not commit this change.
+2. In `web.bakery-admin`, temporarily set `aiImagesAppUrl` to `'http://localhost:3000/'` in
+   `src/environments/environment.ts`. Do not commit this change.
 3. Start the bakery admin with `npm start` (Node 20.19+) and open `http://localhost:4200` as a super admin.
 4. Open a product, click "Improve image" (or open bulk improve from a category).
 
 Local runs use the real OpenAI key, S3 bucket and Slack webhook from `.env`.
+
+## Staging
+
+Stage bakery admin uses `https://foodspace-ai-images-stage.vercel.app/`, a Vercel preview deployment
+with a fixed alias. To update it, deploy a preview and move the alias:
+
+```bash
+vercel deploy
+vercel alias set <preview-deployment-url> foodspace-ai-images-stage.vercel.app
+```
+
+Production (`https://foodspace-ai-images.vercel.app/`) is updated with `vercel deploy --prod`.

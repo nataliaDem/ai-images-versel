@@ -53,14 +53,26 @@ When the app runs on `localhost`, it expects the parent frame to be the bakery a
 
 Local runs use the real OpenAI key, S3 bucket and Slack webhook from `.env`.
 
-## Staging
+## Environments and release process
 
-Stage bakery admin uses `https://foodspace-ai-images-stage.vercel.app/`, a Vercel preview deployment
-with a fixed alias. To update it, deploy a preview and move the alias:
+| Branch    | Vercel environment | URL                                          | Used by             |
+|-----------|--------------------|----------------------------------------------|---------------------|
+| `master`  | Production         | https://foodspace-ai-images.vercel.app       | prod bakery admin   |
+| `release` | Preview            | https://foodspace-ai-images-stage.vercel.app | stage bakery admin  |
+| any other | Preview            | generated per deployment                     | -                   |
 
-```bash
-vercel deploy
-vercel alias set <preview-deployment-url> foodspace-ai-images-stage.vercel.app
-```
+The project is connected to GitHub: every push deploys automatically, `master` to production,
+other branches to preview. The stage domain is assigned to the `release` branch in
+Vercel (Settings → Domains), so it always shows the latest `release` deployment.
 
-Production (`https://foodspace-ai-images.vercel.app/`) is updated with `vercel deploy --prod`.
+Process (same as the bakery admin):
+
+1. Create the task branch from `master`, never from `release`, so that `master` only gets tested work.
+2. Open a PR into `release`. After merge the stage URL is updated, test there with the stage bakery admin.
+3. After testing, open a PR from `release` into `master`. After merge the production URL is updated.
+
+If a change needs a new bakery admin version (for example a new `postMessage` field), release the
+bakery admin to prod first, then merge into `master` here.
+
+Preview deployments use the `Preview` environment variables in Vercel, check them when adding a new variable.
+Deployment Protection must be off for previews, otherwise the stage URL cannot be opened in the admin iframe.

@@ -57,6 +57,7 @@ const elements = {
     costEstimate: document.getElementById("costEstimate"),
     saveButton: document.getElementById("saveButton"),
     singleUploadS3Button: document.getElementById("singleUploadS3Button"),
+    singleAddAsMainButton: document.getElementById("singleAddAsMainButton"),
     singleUploadButtonLabel: document.getElementById("singleUploadButtonLabel"),
     singleUploadButtonText: document.getElementById("singleUploadButtonText"),
     singleUploadNote: document.getElementById("singleUploadNote"),
@@ -379,6 +380,11 @@ const IMAGE_PRICING = {
     vertical: 0.05,
 };
 const BULK_GENERATION_CHUNK_SIZE = 5;
+// Tells the bakery admin how to place the uploaded image in the product gallery
+const SAVE_ACTIONS = {
+    replace: "replace",
+    addAsMain: "add-as-main",
+};
 const OPENAI_SUPPORTED_IMAGE_TYPES = new Set([
     "image/png",
     "image/jpeg",
@@ -616,6 +622,8 @@ function setButtonLoading(button, isLoading, loadingText = "Uploading...") {
         loadingTextNode.textContent = loadingText;
     }
 
+    // Keep the button width while the shorter loading text is shown
+    button.style.minWidth = isLoading ? `${button.offsetWidth}px` : "";
     label?.classList.toggle("is-hidden", isLoading);
     loading?.classList.toggle("is-hidden", !isLoading);
 }
@@ -624,11 +632,20 @@ function isProductGalleryFlow() {
     return Boolean(state.forcedImageUrl || state.forcedBakeryId);
 }
 
+function setSingleUploadButtonsDisabled(isDisabled) {
+    elements.singleUploadS3Button.disabled = isDisabled;
+    elements.singleAddAsMainButton.disabled = isDisabled;
+}
+
 function syncUploadButtonLabels() {
-    if (isProductGalleryFlow()) {
-        elements.singleUploadButtonLabel.textContent = "Set as product image";
+    const isGalleryFlow = isProductGalleryFlow();
+
+    setVisible(elements.singleAddAsMainButton, isGalleryFlow);
+
+    if (isGalleryFlow) {
+        elements.singleUploadButtonLabel.textContent = "Replace original image";
         elements.singleUploadNote.textContent =
-            "By setting as product image, it will be added to the product image gallery last.";
+            "Replace puts the new image in place of the original one. Add as main puts it first in the product gallery and keeps the original.";
         return;
     }
 
@@ -1513,7 +1530,8 @@ function resetSceneSelections() {
 function resetSingleResult() {
     state.resultImageDataUrl = "";
     updatePreview(elements.resultPreview, elements.resultPlaceholder, "");
-    elements.singleUploadS3Button.disabled = true;
+    elements.saveButton.disabled = true;
+    setSingleUploadButtonsDisabled(true);
     setUploadStatus(elements.singleUploadStatus, "");
     setVisible(elements.singleDownloadSection, false);
 }
@@ -2074,7 +2092,7 @@ async function generateSingle() {
         updatePreview(elements.resultPreview, elements.resultPlaceholder, state.resultImageDataUrl);
         await storeSingleGeneration(state.resultImageDataUrl);
         elements.saveButton.disabled = false;
-        elements.singleUploadS3Button.disabled = false;
+        setSingleUploadButtonsDisabled(false);
         setVisible(elements.singleDownloadSection, true);
         setStatus("");
     } catch (error) {
@@ -2547,16 +2565,16 @@ elements.bulkDownloadAllButton.addEventListener("click", async () => {
     }
 });
 
-elements.singleUploadS3Button.addEventListener("click", async () => {
+async function uploadSingleResult(button, action) {
     if (!state.resultImageDataUrl) {
         setStatus("There is nothing to upload yet.", true);
         return;
     }
 
-    elements.singleUploadS3Button.disabled = true;
+    setSingleUploadButtonsDisabled(true);
 
     try {
-        setButtonLoading(elements.singleUploadS3Button, true, "Uploading...");
+        setButtonLoading(button, true, "Uploading...");
         const uploaded = await uploadImageToS3({
             imageDataUrl: state.resultImageDataUrl,
             filenameBase: state.uploadedFileName,
@@ -2575,6 +2593,7 @@ elements.singleUploadS3Button.addEventListener("click", async () => {
         );
         postMessageToParent("s3-uploaded", {
             mode: "single",
+            action,
             bakeryId: state.forcedBakeryId || "",
             sourceImageUrl: state.sourceImageUrl || "",
             uploaded,
@@ -2582,10 +2601,21 @@ elements.singleUploadS3Button.addEventListener("click", async () => {
     } catch (error) {
         showToast("Upload to gallery failed. Please try again.", "error");
     } finally {
-        setButtonLoading(elements.singleUploadS3Button, false);
-        elements.singleUploadS3Button.disabled = false;
+        setButtonLoading(button, false);
+        setSingleUploadButtonsDisabled(false);
     }
+}
+
+elements.singleUploadS3Button.addEventListener("click", () => {
+    // Outside the product gallery flow the image is only uploaded to the gallery
+    const action = isProductGalleryFlow() ? SAVE_ACTIONS.replace : undefined;
+
+    return uploadSingleResult(elements.singleUploadS3Button, action);
 });
+
+elements.singleAddAsMainButton.addEventListener("click", () =>
+    uploadSingleResult(elements.singleAddAsMainButton, SAVE_ACTIONS.addAsMain),
+);
 
 elements.bulkUploadS3Button.addEventListener("click", async () => {
     const successes = state.bulkResults.filter((item) => item.imageDataUrl);
@@ -2723,7 +2753,7 @@ setSingleResultLoading(false);
 setBulkResultLoading(false);
 setVisible(elements.singleDownloadSection, false);
 setVisible(elements.bulkDownloadSection, false);
-elements.singleUploadS3Button.disabled = true;
+setSingleUploadButtonsDisabled(true);
 elements.bulkUploadS3Button.disabled = true;
 setButtonLoading(elements.singleUploadS3Button, false);
 setButtonLoading(elements.bulkUploadS3Button, false);

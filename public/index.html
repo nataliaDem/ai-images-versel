@@ -269,7 +269,7 @@
                         class="toggle-row is-hidden"
                         for="preserveOrientation"
                     >
-                        <span>Preserve source image orientation.</span>
+                        <span>Keep original image proportions</span>
                         <input
                             id="preserveOrientation"
                             type="checkbox"
@@ -325,6 +325,18 @@
                                     id="resultPreview"
                                     alt="Generated image"
                                 />
+                                <button
+                                    id="saveButton"
+                                    class="preview-icon-button"
+                                    type="button"
+                                    title="Download to your device"
+                                    aria-label="Download to your device"
+                                    disabled
+                                >
+                                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                                        <path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14" />
+                                    </svg>
+                                </button>
                                 <div
                                     id="resultPlaceholder"
                                     class="placeholder"
@@ -345,13 +357,6 @@
                             >
                                 <div class="preview-action-row">
                                     <button
-                                        id="saveButton"
-                                        class="outline-button preview-download-button"
-                                        disabled
-                                    >
-                                        Download to your device
-                                    </button>
-                                    <button
                                         id="singleUploadS3Button"
                                         class="primary-button preview-download-button"
                                         type="button"
@@ -361,6 +366,18 @@
                                         <span class="button-loading is-hidden">
                                             <span class="button-spinner" aria-hidden="true"></span>
                                             <span id="singleUploadButtonText">Uploading...</span>
+                                        </span>
+                                    </button>
+                                    <button
+                                        id="singleAddAsMainButton"
+                                        class="outline-button preview-download-button is-hidden"
+                                        type="button"
+                                        disabled
+                                    >
+                                        <span class="button-label">Add as main image and keep the old image</span>
+                                        <span class="button-loading is-hidden">
+                                            <span class="button-spinner" aria-hidden="true"></span>
+                                            <span>Uploading...</span>
                                         </span>
                                     </button>
                                 </div>

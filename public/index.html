@@ -391,7 +391,21 @@
 
                     <div id="bulkPreviewSection">
                         <div class="preview-card">
-                            <div class="preview-heading">Result</div>
+                            <div class="preview-heading-row">
+                                <div class="preview-heading">Result</div>
+                                <button
+                                    id="bulkDownloadAllButton"
+                                    class="preview-icon-button is-inline is-hidden"
+                                    type="button"
+                                    title="Download all to your device"
+                                    aria-label="Download all to your device"
+                                    disabled
+                                >
+                                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                                        <path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14" />
+                                    </svg>
+                                </button>
+                            </div>
                             <div class="preview-frame bulk-result-surface">
                                 <div
                                     id="bulkResultsGrid"
@@ -419,24 +433,24 @@
                             >
                                 <div class="preview-action-row">
                                     <button
-                                        id="bulkDownloadAllButton"
-                                        class="outline-button preview-download-button bulk-download-all-button"
-                                        type="button"
-                                        disabled
-                                    >
-                                        Download all to your device
-                                    </button>
-                                    <button
                                         id="bulkUploadS3Button"
                                         class="secondary-button preview-download-button bulk-download-all-button"
                                         type="button"
                                         disabled
                                     >
-                                        <span class="button-label">Upload all to AI library</span>
+                                        <span id="bulkUploadButtonLabel" class="button-label">Upload all to AI library</span>
                                         <span class="button-loading is-hidden">
                                             <span class="button-spinner" aria-hidden="true"></span>
                                             <span id="bulkUploadButtonText">Uploading...</span>
                                         </span>
+                                    </button>
+                                    <button
+                                        id="bulkAddAsMainButton"
+                                        class="outline-button preview-download-button bulk-download-all-button is-hidden"
+                                        type="button"
+                                        disabled
+                                    >
+                                        Add as main images and keep the old images
                                     </button>
                                 </div>
                                 <p id="bulkUploadNote" class="bulk-download-note">

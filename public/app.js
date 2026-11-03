@@ -74,6 +74,8 @@ const elements = {
     bulkResultLoader: document.getElementById("bulkResultLoader"),
     bulkDownloadAllButton: document.getElementById("bulkDownloadAllButton"),
     bulkUploadS3Button: document.getElementById("bulkUploadS3Button"),
+    bulkUploadButtonLabel: document.getElementById("bulkUploadButtonLabel"),
+    bulkAddAsMainButton: document.getElementById("bulkAddAsMainButton"),
     bulkUploadButtonText: document.getElementById("bulkUploadButtonText"),
     bulkUploadNote: document.getElementById("bulkUploadNote"),
     bulkUploadStatus: document.getElementById("bulkUploadStatus"),
@@ -385,6 +387,11 @@ const SAVE_ACTIONS = {
     replace: "replace",
     addAsMain: "add-as-main",
 };
+// Same limit and height / width ratios as the bakery admin product image cropper
+// (PRODUCT_IMAGE_ASPECT_RATIOS in web.bakery-admin image-croppper-constants.ts)
+const PRODUCT_IMAGE_MAX_SIZE = 1500;
+const PRODUCT_IMAGE_RATIOS = [0.652777777777778, 1.486111111111111, 1];
+const PRODUCT_IMAGE_JPEG_QUALITY = 0.9;
 const OPENAI_SUPPORTED_IMAGE_TYPES = new Set([
     "image/png",
     "image/jpeg",
@@ -637,8 +644,21 @@ function setSingleUploadButtonsDisabled(isDisabled) {
     elements.singleAddAsMainButton.disabled = isDisabled;
 }
 
+function setBulkUploadButtonsDisabled(isDisabled) {
+    elements.bulkUploadS3Button.disabled = isDisabled;
+    elements.bulkAddAsMainButton.disabled = isDisabled;
+}
+
 function syncUploadButtonLabels() {
     const isGalleryFlow = isProductGalleryFlow();
+
+    setVisible(elements.bulkAddAsMainButton, state.forcedBulkMode);
+
+    if (state.forcedBulkMode) {
+        elements.bulkUploadButtonLabel.textContent = "Replace original images";
+        elements.bulkUploadNote.textContent =
+            "Replace puts each new image in place of the product's original image. Add as main puts it first in the product gallery and keeps the original.";
+    }
 
     setVisible(elements.singleAddAsMainButton, isGalleryFlow);
 
@@ -682,6 +702,48 @@ function showAuthLoading(title = "Loading", message = "") {
 
 function hideAuthLoading() {
     setVisible(elements.authLoading, false);
+}
+
+// Without the admin cropper in bulk mode the image is center-cropped to the closest product
+// ratio here. Generated PNGs are several MB, so it is uploaded as JPEG like in the cropper.
+function toProductImageDataUrl(imageDataUrl) {
+    return new Promise((resolve, reject) => {
+        const image = new Image();
+
+        image.onload = () => {
+            const { naturalWidth: width, naturalHeight: height } = image;
+            const ratio = PRODUCT_IMAGE_RATIOS.reduce((closest, current) =>
+                Math.abs(current - height / width) < Math.abs(closest - height / width)
+                    ? current
+                    : closest,
+            );
+            const cropWidth = Math.min(width, height / ratio);
+            const cropHeight = cropWidth * ratio;
+            const scale = Math.min(1, PRODUCT_IMAGE_MAX_SIZE / Math.max(cropWidth, cropHeight));
+            const canvas = document.createElement("canvas");
+            canvas.width = Math.round(cropWidth * scale);
+            canvas.height = Math.round(cropHeight * scale);
+
+            const context = canvas.getContext("2d");
+            context.fillStyle = "#ffffff";
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            context.drawImage(
+                image,
+                (width - cropWidth) / 2,
+                (height - cropHeight) / 2,
+                cropWidth,
+                cropHeight,
+                0,
+                0,
+                canvas.width,
+                canvas.height,
+            );
+
+            resolve(canvas.toDataURL("image/jpeg", PRODUCT_IMAGE_JPEG_QUALITY));
+        };
+        image.onerror = () => reject(new Error("Could not read the generated image."));
+        image.src = imageDataUrl;
+    });
 }
 
 function postMessageToParent(type, payload = {}) {
@@ -1923,7 +1985,8 @@ function renderBulkResults(results) {
     const errors = results.filter((item) => item.error);
 
     elements.bulkDownloadAllButton.disabled = successes.length === 0;
-    elements.bulkUploadS3Button.disabled = successes.length === 0;
+    setVisible(elements.bulkDownloadAllButton, successes.length > 0);
+    setBulkUploadButtonsDisabled(successes.length === 0);
     if (successes.length === 0) {
         setUploadStatus(elements.bulkUploadStatus, "");
     }
@@ -2617,7 +2680,90 @@ elements.singleAddAsMainButton.addEventListener("click", () =>
     uploadSingleResult(elements.singleAddAsMainButton, SAVE_ACTIONS.addAsMain),
 );
 
+// The bakery admin shows one loader for the whole save: it gets the image count first,
+// then each image as soon as it is prepared, and saves it to the product.
+// Images go one by one; for each image the AI library upload runs alongside saving to the product.
+async function sendBulkResultsToParent(action) {
+    const successes = state.bulkResults.filter((item) => item.imageDataUrl);
+    const bakeryId = state.forcedBakeryId;
+    const bakeryName = getCurrentBakeryName();
+    const categoryId = getCurrentCategoryId();
+    const categoryName = getCurrentCategoryName();
+    let libraryFailedCount = 0;
+
+    if (successes.length === 0) {
+        setStatus("There are no generated results to save yet.", true);
+        return;
+    }
+
+    setBulkUploadButtonsDisabled(true);
+    postMessageToParent("bulk-images-start", {
+        mode: "bulk",
+        action,
+        bakeryId: bakeryId || "",
+        total: successes.length,
+    });
+
+    for (const item of successes) {
+        const libraryUpload = uploadImageToS3({
+            imageDataUrl: item.imageDataUrl,
+            filenameBase: `${item.id || "item"}-${item.name || "generated-image"}`,
+            bakeryId,
+            bakeryName,
+            categoryId,
+            categoryName,
+            mode: "bulk",
+            sourceType: "product_gallery",
+            notifySlack: false,
+        }).catch(() => {
+            libraryFailedCount += 1;
+        });
+
+        try {
+            // eslint-disable-next-line no-await-in-loop
+            const imageDataUrl = await toProductImageDataUrl(item.imageDataUrl);
+
+            postMessageToParent("bulk-image-ready", {
+                productId: item.id,
+                originalImageId:
+                    state.products.find((product) => product.id === item.id)?.imageId || null,
+                imageDataUrl,
+            });
+        } catch (error) {
+            postMessageToParent("bulk-image-failed", { productId: item.id });
+        }
+
+        // eslint-disable-next-line no-await-in-loop
+        await libraryUpload;
+    }
+
+    notifyAction({
+        operation: "upload",
+        status: libraryFailedCount === successes.length ? "error" : "success",
+        mode: "bulk",
+        bakeryId,
+        bakeryName,
+        categoryId,
+        categoryName,
+        itemCount: successes.length,
+        successCount: successes.length - libraryFailedCount,
+        errorCount: libraryFailedCount,
+        fileCount: successes.length - libraryFailedCount,
+        sourceType: "product_gallery",
+    });
+    setBulkUploadButtonsDisabled(false);
+}
+
+elements.bulkAddAsMainButton.addEventListener("click", () =>
+    sendBulkResultsToParent(SAVE_ACTIONS.addAsMain),
+);
+
 elements.bulkUploadS3Button.addEventListener("click", async () => {
+    if (state.forcedBulkMode) {
+        await sendBulkResultsToParent(SAVE_ACTIONS.replace);
+        return;
+    }
+
     const successes = state.bulkResults.filter((item) => item.imageDataUrl);
     const bakeryId = state.forcedBakeryId || elements.bakerySelect.value;
     const bakeryName = getCurrentBakeryName();
@@ -2754,7 +2900,7 @@ setBulkResultLoading(false);
 setVisible(elements.singleDownloadSection, false);
 setVisible(elements.bulkDownloadSection, false);
 setSingleUploadButtonsDisabled(true);
-elements.bulkUploadS3Button.disabled = true;
+setBulkUploadButtonsDisabled(true);
 setButtonLoading(elements.singleUploadS3Button, false);
 setButtonLoading(elements.bulkUploadS3Button, false);
 renderBulkSources();

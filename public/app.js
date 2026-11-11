@@ -33,7 +33,20 @@ const elements = {
     bulkSourcesGrid: document.getElementById("bulkSourcesGrid"),
     sceneSection: document.getElementById("sceneSection"),
     scenePresetGrid: document.getElementById("scenePresetGrid"),
+    savedScenesSection: document.getElementById("savedScenesSection"),
+    savedScenesList: document.getElementById("savedScenesList"),
     sceneCustomizePanel: document.getElementById("sceneCustomizePanel"),
+    sceneSaveRow: document.getElementById("sceneSaveRow"),
+    singleSceneAutoSave: document.getElementById("singleSceneAutoSave"),
+    singleSceneAutoSaveCheckbox: document.getElementById("singleSceneAutoSaveCheckbox"),
+    bulkSceneAutoSave: document.getElementById("bulkSceneAutoSave"),
+    bulkSceneAutoSaveCheckbox: document.getElementById("bulkSceneAutoSaveCheckbox"),
+    confirmDialog: document.getElementById("confirmDialog"),
+    confirmDialogText: document.getElementById("confirmDialogText"),
+    confirmDialogCancel: document.getElementById("confirmDialogCancel"),
+    confirmDialogConfirm: document.getElementById("confirmDialogConfirm"),
+    sceneNameInput: document.getElementById("sceneNameInput"),
+    saveSceneButton: document.getElementById("saveSceneButton"),
     toggleSceneCustomizeButton: document.getElementById("toggleSceneCustomizeButton"),
     selectedSceneName: document.getElementById("selectedSceneName"),
     wallField: document.getElementById("wallField"),
@@ -355,6 +368,10 @@ const state = {
     appEnvironment: EMBED_CONFIG.environment,
     selectedScenePresetId: SCENE_PRESETS[0].id,
     sceneCustomizeOpen: false,
+    // Scenes saved by the admins of the current bakery
+    savedScenes: [],
+    // Custom scene of the last generation, saved with the first saved result if the admin keeps it checked
+    generationScene: null,
     targetOrientation: "horizontal",
     authToken: "",
     authTokenRequest: null,
@@ -376,6 +393,8 @@ const DB_CONFIG = {
 };
 
 const STORAGE_LIMIT = 100;
+const SAVED_SCENE_ID_PREFIX = "saved:";
+const SCENE_PREVIEW_SIZE = 320;
 const IMAGE_PRICING = {
     square: 0.034,
     horizontal: 0.05,
@@ -1254,11 +1273,11 @@ function setBakeriesLoading(isLoading) {
         elements.bakerySelect.disabled = true;
         elements.bakerySearchInput.disabled = true;
         setBakeryDropdownOpen(false);
-        elements.bakerySearchInput.placeholder = "Loading bakeries...";
+        elements.bakerySearchInput.placeholder = "Loading sellers...";
     }
     if (!isLoading) {
         elements.bakerySearchInput.disabled = false;
-        elements.bakerySearchInput.placeholder = "Choose a bakery";
+        elements.bakerySearchInput.placeholder = "Choose a seller";
     }
     updateControlsLoadingOverlay();
     updateStepVisibility();
@@ -1294,9 +1313,396 @@ function getMatchingScenePresetId() {
     return preset?.id || "";
 }
 
+// A saved scene keeps its own prompt, possibly edited by the admin who saved it
+function applySavedScene(scene) {
+    elements.wallSelect.value = scene.wall;
+    elements.tableSelect.value = scene.table;
+    elements.standSelect.value = scene.stand;
+    state.sceneCustomizeOpen = false;
+    updatePromptFromSelections();
+
+    elements.promptEditor.value = scene.prompt;
+    state.selectedScenePresetId = `${SAVED_SCENE_ID_PREFIX}${scene.id}`;
+    syncScenePresetSelection();
+    updateSceneCustomizeVisibility();
+}
+
+function getScenesBakeryId() {
+    return state.forcedBakeryId || elements.bakerySelect.value || "";
+}
+
+async function loadSavedScenes() {
+    const bakeryId = getScenesBakeryId();
+
+    state.savedScenes = [];
+    setVisible(elements.sceneSaveRow, Boolean(bakeryId));
+
+    if (bakeryId) {
+        try {
+            const payload = await fetchJson(
+                `/api/scenes?bakeryId=${encodeURIComponent(bakeryId)}`,
+            );
+
+            // The bakery could change while the scenes were loading
+            if (bakeryId === getScenesBakeryId()) {
+                state.savedScenes = payload.scenes || [];
+            }
+        } catch (error) {
+            console.warn("Could not load saved scenes.", error);
+        }
+    }
+
+    renderScenePresets();
+}
+
+function getLatestResultImageDataUrl() {
+    return (
+        state.resultImageDataUrl ||
+        state.bulkResults.find((item) => item.imageDataUrl)?.imageDataUrl ||
+        ""
+    );
+}
+
+function toScenePreviewDataUrl(imageDataUrl) {
+    return new Promise((resolve, reject) => {
+        const image = new Image();
+
+        image.onload = () => {
+            const scale = Math.min(
+                1,
+                SCENE_PREVIEW_SIZE / Math.max(image.naturalWidth, image.naturalHeight),
+            );
+            const canvas = document.createElement("canvas");
+            canvas.width = Math.round(image.naturalWidth * scale);
+            canvas.height = Math.round(image.naturalHeight * scale);
+            canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
+            resolve(canvas.toDataURL("image/jpeg", 0.8));
+        };
+        image.onerror = () => reject(new Error("Could not read the result image."));
+        image.src = imageDataUrl;
+    });
+}
+
+async function createScene({ name, wall, table, stand, prompt, previewSourceDataUrl }) {
+    const response = await fetch(buildInternalApiUrl("/api/scenes"), {
+        method: "POST",
+        headers: await buildAuthHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({
+            bakeryId: getScenesBakeryId(),
+            env: state.appEnvironment,
+            scene: {
+                name,
+                wall,
+                table,
+                stand,
+                prompt,
+                previewDataUrl: previewSourceDataUrl
+                    ? await toScenePreviewDataUrl(previewSourceDataUrl)
+                    : null,
+            },
+        }),
+    });
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+        throw new Error(payload.error || "Could not save the scene.");
+    }
+
+    state.savedScenes = [...state.savedScenes, payload.scene];
+    renderScenePresets();
+
+    return payload.scene;
+}
+
+async function saveCurrentScene() {
+    const sceneOptions = {
+        wall: elements.wallSelect.value,
+        table: elements.tableSelect.value,
+        stand: elements.standSelect.value,
+    };
+
+    elements.saveSceneButton.disabled = true;
+
+    try {
+        const scene = await createScene({
+            ...sceneOptions,
+            name: elements.sceneNameInput.value.trim() || getDefaultSceneName(sceneOptions),
+            prompt: elements.promptEditor.value,
+            previewSourceDataUrl: getLatestResultImageDataUrl(),
+        });
+
+        elements.sceneNameInput.value = "";
+        applySavedScene(scene);
+        showToast("Scene saved. Everyone at this seller can use it now.", "success");
+    } catch (error) {
+        showToast(error.message, "error");
+    } finally {
+        elements.saveSceneButton.disabled = false;
+    }
+}
+
+function isSameScene(first, second) {
+    return (
+        first.wall === second.wall &&
+        first.table === second.table &&
+        first.stand === second.stand &&
+        first.prompt.trim() === second.prompt.trim()
+    );
+}
+
+function getDefaultSceneName({ wall, table, stand }) {
+    return [
+        getSelectedOption(PROMPT_OPTIONS.walls, wall),
+        getSelectedOption(PROMPT_OPTIONS.tables, table),
+        getSelectedOption(PROMPT_OPTIONS.stands, stand),
+    ]
+        .map((option) => option?.label)
+        .filter(Boolean)
+        .join(" · ")
+        .slice(0, 60);
+}
+
+function getSceneAutoSaveElements() {
+    return state.mode === "single"
+        ? { row: elements.singleSceneAutoSave, checkbox: elements.singleSceneAutoSaveCheckbox }
+        : { row: elements.bulkSceneAutoSave, checkbox: elements.bulkSceneAutoSaveCheckbox };
+}
+
+// Remembers the scene a generation starts with: a custom one (not a built-in preset with its
+// own prompt and not a saved scene) is offered for saving under the result, checked by default
+function captureGenerationScene() {
+    const scene = {
+        wall: elements.wallSelect.value,
+        table: elements.tableSelect.value,
+        stand: elements.standSelect.value,
+        prompt: elements.promptEditor.value,
+    };
+    const isPreset = Boolean(getMatchingScenePresetId()) && scene.prompt.trim() === buildPrompt().trim();
+    const isSaved = state.savedScenes.some((savedScene) => isSameScene(savedScene, scene));
+
+    state.generationScene = !isPreset && !isSaved && getScenesBakeryId() ? scene : null;
+    setVisible(elements.singleSceneAutoSave, false);
+    setVisible(elements.bulkSceneAutoSave, false);
+}
+
+// Shown once the generation has a result to save
+function showGenerationSceneOffer() {
+    const autoSave = getSceneAutoSaveElements();
+
+    if (!state.generationScene) {
+        return;
+    }
+
+    autoSave.checkbox.checked = true;
+    setVisible(autoSave.row, true);
+}
+
+// Called by every way of saving a result (to products, to the AI library, to the device).
+// A failed scene save must not block saving the images.
+async function saveGenerationSceneIfChecked() {
+    const scene = state.generationScene;
+    const autoSave = getSceneAutoSaveElements();
+
+    // Only the offer the admin can see right now: not after a reset or a mode switch
+    if (!scene || !autoSave.checkbox.checked || autoSave.row.classList.contains("is-hidden")) {
+        return;
+    }
+
+    state.generationScene = null;
+    setVisible(autoSave.row, false);
+
+    if (state.savedScenes.some((savedScene) => isSameScene(savedScene, scene))) {
+        return;
+    }
+
+    try {
+        await createScene({
+            ...scene,
+            // Named after its options; can be renamed in the Custom list
+            name: getDefaultSceneName(scene),
+            previewSourceDataUrl: getLatestResultImageDataUrl(),
+        });
+        showToast("Scene saved to Custom.", "success");
+    } catch (error) {
+        showToast(`Could not save the scene: ${error.message}`, "error");
+    }
+}
+
+// The name is edited in place: Enter or leaving the field saves, Escape cancels
+function startRenamingScene(sceneId) {
+    const scene = state.savedScenes.find((item) => item.id === sceneId);
+    const row = elements.savedScenesList.querySelector(
+        `[data-scene-preset-id="${SAVED_SCENE_ID_PREFIX}${sceneId}"]`,
+    );
+
+    if (!scene || !row) {
+        return;
+    }
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.maxLength = 60;
+    input.value = scene.name;
+    input.className = "saved-scene-name-input";
+    input.setAttribute("aria-label", "Scene name");
+    row.querySelector(".saved-scene-name").replaceWith(input);
+    row.querySelectorAll(".saved-scene-action").forEach((button) => setVisible(button, false));
+    input.focus();
+    input.select();
+
+    let isDone = false;
+
+    async function finish(isSaving) {
+        if (isDone) {
+            return;
+        }
+
+        isDone = true;
+        const name = input.value.trim();
+
+        if (isSaving && name && name !== scene.name) {
+            const spinner = document.createElement("span");
+            spinner.className = "saved-scene-spinner";
+            spinner.setAttribute("aria-label", "Saving");
+            input.disabled = true;
+            input.after(spinner);
+
+            try {
+                await renameScene(scene, name);
+            } catch (error) {
+                showToast(error.message, "error");
+            }
+        }
+
+        renderScenePresets();
+    }
+
+    input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            finish(true);
+        }
+
+        if (event.key === "Escape") {
+            event.stopPropagation();
+            finish(false);
+        }
+    });
+    input.addEventListener("blur", () => finish(true));
+}
+
+async function renameScene(scene, name) {
+    const response = await fetch(buildInternalApiUrl("/api/scenes"), {
+        method: "PATCH",
+        headers: await buildAuthHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({
+            bakeryId: getScenesBakeryId(),
+            env: state.appEnvironment,
+            id: scene.id,
+            name,
+        }),
+    });
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+        throw new Error(payload.error || "Could not rename the scene.");
+    }
+
+    state.savedScenes = state.savedScenes.map((item) =>
+        item.id === scene.id ? payload.scene : item,
+    );
+}
+
+// In-app replacement for window.confirm: the native one shows the iframe origin as its title
+function showConfirmDialog({ message, confirmLabel }) {
+    elements.confirmDialogText.textContent = message;
+    elements.confirmDialogConfirm.textContent = confirmLabel;
+    setVisible(elements.confirmDialog, true);
+    elements.confirmDialogCancel.focus();
+
+    return new Promise((resolve) => {
+        function close(isConfirmed) {
+            setVisible(elements.confirmDialog, false);
+            elements.confirmDialogConfirm.removeEventListener("click", onConfirm);
+            elements.confirmDialogCancel.removeEventListener("click", onCancel);
+            elements.confirmDialog.removeEventListener("click", onBackdrop);
+            window.removeEventListener("keydown", onKeydown);
+            resolve(isConfirmed);
+        }
+
+        function onConfirm() {
+            close(true);
+        }
+
+        function onCancel() {
+            close(false);
+        }
+
+        function onBackdrop(event) {
+            if (event.target === elements.confirmDialog) {
+                close(false);
+            }
+        }
+
+        function onKeydown(event) {
+            if (event.key === "Escape") {
+                close(false);
+            }
+        }
+
+        elements.confirmDialogConfirm.addEventListener("click", onConfirm);
+        elements.confirmDialogCancel.addEventListener("click", onCancel);
+        elements.confirmDialog.addEventListener("click", onBackdrop);
+        window.addEventListener("keydown", onKeydown);
+    });
+}
+
+async function deleteSavedScene(sceneId) {
+    const scene = state.savedScenes.find((item) => item.id === sceneId);
+
+    if (!scene) {
+        return;
+    }
+
+    const isConfirmed = await showConfirmDialog({
+        message: `Delete the scene "${scene.name}" for everyone at this seller?`,
+        confirmLabel: "Delete",
+    });
+
+    if (!isConfirmed) {
+        return;
+    }
+
+    try {
+        const response = await fetch(
+            buildInternalApiUrl("/api/scenes", { bakeryId: getScenesBakeryId(), id: sceneId }),
+            { method: "DELETE", headers: await buildAuthHeaders() },
+        );
+
+        if (!response.ok) {
+            const payload = await response.json().catch(() => ({}));
+            throw new Error(payload.error || "Could not delete the scene.");
+        }
+
+        state.savedScenes = state.savedScenes.filter((item) => item.id !== sceneId);
+
+        if (state.selectedScenePresetId === `${SAVED_SCENE_ID_PREFIX}${sceneId}`) {
+            state.selectedScenePresetId = getMatchingScenePresetId();
+        }
+
+        renderScenePresets();
+    } catch (error) {
+        showToast(error.message, "error");
+    }
+}
+
 function updateSceneCustomizeVisibility() {
     setVisible(elements.sceneCustomizePanel, state.sceneCustomizeOpen);
     setVisible(elements.scenePresetGrid, !state.sceneCustomizeOpen);
+    setVisible(
+        elements.savedScenesSection,
+        !state.sceneCustomizeOpen && state.savedScenes.length > 0,
+    );
     elements.toggleSceneCustomizeButton.textContent = state.sceneCustomizeOpen
         ? "Choose preset"
         : "Customize";
@@ -1307,12 +1713,56 @@ function updateSceneCustomizeVisibility() {
     syncScenePresetSelection();
 }
 
+// Scene names are typed by admins and rendered as HTML
+function escapeHtml(value) {
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+function renderSavedSceneRow(scene) {
+    const thumb = scene.previewDataUrl
+        ? `<img class="saved-scene-thumb" src="${scene.previewDataUrl}" alt="" />`
+        : `<span class="saved-scene-thumb" aria-hidden="true">${escapeHtml(scene.name.charAt(0).toUpperCase())}</span>`;
+
+    return `
+        <div
+            class="saved-scene-row"
+            role="button"
+            tabindex="0"
+            title="${escapeHtml(scene.name)}"
+            data-scene-preset-id="${SAVED_SCENE_ID_PREFIX}${scene.id}"
+        >
+            ${thumb}
+            <span class="saved-scene-name">${escapeHtml(scene.name)}</span>
+            <button
+                class="saved-scene-action"
+                type="button"
+                title="Rename scene"
+                aria-label="Rename scene ${escapeHtml(scene.name)}"
+                data-rename-scene-id="${scene.id}"
+            >✎</button>
+            <button
+                class="saved-scene-action is-delete"
+                type="button"
+                title="Delete scene"
+                aria-label="Delete scene ${escapeHtml(scene.name)}"
+                data-delete-scene-id="${scene.id}"
+            >×</button>
+        </div>
+    `;
+}
+
 function renderScenePresets() {
     elements.scenePresetGrid.innerHTML = SCENE_PRESETS.map(
         (preset) => `
             <button
                 class="scene-preset-card ${preset.type === "utility" ? "scene-preset-card-utility" : ""}"
                 type="button"
+                title="${preset.name}"
                 data-scene-preset-id="${preset.id}"
             >
                 ${
@@ -1328,19 +1778,29 @@ function renderScenePresets() {
             </button>
         `,
     ).join("");
+    elements.savedScenesList.innerHTML = state.savedScenes.map(renderSavedSceneRow).join("");
 
     syncScenePresetSelection();
+    updateSceneCustomizeVisibility();
+}
+
+function getSavedScene(presetId) {
+    return state.savedScenes.find(
+        (scene) => `${SAVED_SCENE_ID_PREFIX}${scene.id}` === presetId,
+    );
 }
 
 function syncScenePresetSelection() {
-    const activePreset = SCENE_PRESETS.find((preset) => preset.id === state.selectedScenePresetId);
+    const activePreset =
+        SCENE_PRESETS.find((preset) => preset.id === state.selectedScenePresetId) ||
+        getSavedScene(state.selectedScenePresetId);
     elements.selectedSceneName.textContent = state.sceneCustomizeOpen
         ? "Custom"
         : activePreset
           ? activePreset.name
           : "Custom";
 
-    elements.scenePresetGrid.querySelectorAll("[data-scene-preset-id]").forEach((button) => {
+    elements.sceneSection.querySelectorAll("[data-scene-preset-id]").forEach((button) => {
         button.classList.toggle(
             "is-active",
             button.dataset.scenePresetId === state.selectedScenePresetId,
@@ -1349,6 +1809,13 @@ function syncScenePresetSelection() {
 }
 
 function applyScenePreset(presetId, options = {}) {
+    const savedScene = getSavedScene(presetId);
+
+    if (savedScene) {
+        applySavedScene(savedScene);
+        return;
+    }
+
     const preset = SCENE_PRESETS.find((item) => item.id === presetId);
 
     if (!preset) {
@@ -1443,7 +1910,7 @@ function filterBakeries(searchTerm = "") {
         !normalizedSearch || String(bakery.name || "").toLowerCase().includes(normalizedSearch),
     );
 
-    fillSelect(elements.bakerySelect, state.filteredBakeries, "Choose a bakery");
+    fillSelect(elements.bakerySelect, state.filteredBakeries, "Choose a seller");
 
     if (
         selectedValue &&
@@ -1467,7 +1934,7 @@ function setBakeryDropdownOpen(isOpen) {
 function renderBakeryDropdown() {
     if (state.filteredBakeries.length === 0) {
         elements.bakeryDropdown.innerHTML =
-            '<div class="search-select-empty">No bakeries found</div>';
+            '<div class="search-select-empty">No sellers found</div>';
         return;
     }
 
@@ -1591,6 +2058,7 @@ function resetSceneSelections() {
 
 function resetSingleResult() {
     state.resultImageDataUrl = "";
+    setVisible(elements.singleSceneAutoSave, false);
     updatePreview(elements.resultPreview, elements.resultPlaceholder, "");
     elements.saveButton.disabled = true;
     setSingleUploadButtonsDisabled(true);
@@ -1823,7 +2291,7 @@ async function ensureBakeriesLoaded() {
         syncBakerySearchInput();
         state.bakeriesLoaded = true;
     } catch (error) {
-        fillSelect(elements.bakerySelect, [], "Could not load bakeries");
+        fillSelect(elements.bakerySelect, [], "Could not load sellers");
         elements.bakerySelect.disabled = true;
         state.bakeriesFailed = true;
         throw error;
@@ -1847,7 +2315,7 @@ async function bootstrapForcedBakerySelection() {
         );
 
         if (!matchingBakery) {
-            throw new Error("The requested bakery could not be found.");
+            throw new Error("The requested seller could not be found.");
         }
 
         elements.bakerySelect.value = String(matchingBakery.id);
@@ -1945,7 +2413,7 @@ function renderBulkSources() {
     if (state.products.length === 0) {
         updateSelectAllProductsLabel();
         elements.bulkSourcesGrid.className = "bulk-results-grid empty-state";
-        elements.bulkSourcesGrid.textContent = "Choose a bakery and category to load products.";
+        elements.bulkSourcesGrid.textContent = "Choose a seller and category to load products.";
         updateStepVisibility();
         return;
     }
@@ -2116,6 +2584,7 @@ async function generateSingle() {
 
     elements.generateButton.disabled = true;
     elements.saveButton.disabled = true;
+    captureGenerationScene();
     setSingleResultLoading(true);
     scrollToResultSection();
     setStatus("");
@@ -2152,6 +2621,7 @@ async function generateSingle() {
         const payload = await response.json();
 
         state.resultImageDataUrl = payload.imageDataUrl;
+        showGenerationSceneOffer();
         updatePreview(elements.resultPreview, elements.resultPlaceholder, state.resultImageDataUrl);
         await storeSingleGeneration(state.resultImageDataUrl);
         elements.saveButton.disabled = false;
@@ -2242,7 +2712,7 @@ async function generateBulk() {
     const categoryName = getCurrentCategoryName();
 
     if (!elements.bakerySelect.value || !categoryId) {
-        setStatus("Please choose a bakery and category first.", true);
+        setStatus("Please choose a seller and category first.", true);
         return;
     }
 
@@ -2257,6 +2727,7 @@ async function generateBulk() {
     }
 
     elements.generateButton.disabled = true;
+    captureGenerationScene();
     setBulkResultLoading(true);
     renderBulkResults([]);
     scrollToResultSection();
@@ -2303,6 +2774,10 @@ async function generateBulk() {
     } finally {
         setBulkResultLoading(false);
         elements.generateButton.disabled = false;
+
+        if (state.bulkResults.some((item) => item.imageDataUrl)) {
+            showGenerationSceneOffer();
+        }
     }
 }
 
@@ -2378,6 +2853,7 @@ elements.bakerySelect.addEventListener("change", async (event) => {
         syncBakerySearchInput();
         setBakeryDropdownOpen(false);
         setBulkSelectionLoading(Boolean(event.target.value));
+        loadSavedScenes();
         await loadCategories(event.target.value);
     } catch (error) {
         setStatus(error.message, true);
@@ -2421,6 +2897,7 @@ elements.bakeryDropdown.addEventListener("click", async (event) => {
 
     try {
         setBulkSelectionLoading(Boolean(elements.bakerySelect.value));
+        loadSavedScenes();
         await loadCategories(elements.bakerySelect.value);
     } catch (error) {
         setStatus(error.message, true);
@@ -2491,7 +2968,25 @@ elements.toggleSceneCustomizeButton.addEventListener("click", () => {
     state.sceneCustomizeOpen = !state.sceneCustomizeOpen;
     updateSceneCustomizeVisibility();
 });
-elements.scenePresetGrid.addEventListener("click", (event) => {
+function handleSceneClick(event) {
+    if (event.target.closest(".saved-scene-name-input")) {
+        return;
+    }
+
+    const renameButton = event.target.closest("[data-rename-scene-id]");
+
+    if (renameButton) {
+        startRenamingScene(renameButton.dataset.renameSceneId);
+        return;
+    }
+
+    const deleteButton = event.target.closest("[data-delete-scene-id]");
+
+    if (deleteButton) {
+        deleteSavedScene(deleteButton.dataset.deleteSceneId);
+        return;
+    }
+
     const presetButton = event.target.closest("[data-scene-preset-id]");
 
     if (!presetButton) {
@@ -2499,6 +2994,24 @@ elements.scenePresetGrid.addEventListener("click", (event) => {
     }
 
     applyScenePreset(presetButton.dataset.scenePresetId);
+}
+
+elements.scenePresetGrid.addEventListener("click", handleSceneClick);
+elements.savedScenesList.addEventListener("click", handleSceneClick);
+elements.savedScenesList.addEventListener("keydown", (event) => {
+    const savedRow = event.target.closest(".saved-scene-row");
+
+    if (savedRow && event.target === savedRow && (event.key === "Enter" || event.key === " ")) {
+        event.preventDefault();
+        applyScenePreset(savedRow.dataset.scenePresetId);
+    }
+});
+
+elements.saveSceneButton.addEventListener("click", saveCurrentScene);
+elements.sceneNameInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+        saveCurrentScene();
+    }
 });
 
 elements.togglePromptButton.addEventListener("click", () => {
@@ -2556,7 +3069,7 @@ elements.bulkDownloadAllButton.addEventListener("click", async () => {
 
     try {
         const generationDate = new Date().toISOString().slice(0, 10);
-        const bakeryName = getCurrentBakeryName() || "bakery";
+        const bakeryName = getCurrentBakeryName() || "seller";
         const categoryName = getCurrentCategoryName() || "category";
         const archiveName = `${bakeryName}-${categoryName}-${generationDate}`
             .replace(/[<>:"/\\|?*\x00-\x1F]+/g, "-")
@@ -2604,6 +3117,7 @@ elements.bulkDownloadAllButton.addEventListener("click", async () => {
             archiveName,
             sourceType: "generated_results",
         });
+        saveGenerationSceneIfChecked();
         setStatus("Archive download started.");
     } catch (error) {
         notifyAction({
@@ -2648,6 +3162,8 @@ async function uploadSingleResult(button, action) {
             mode: "single",
             sourceType: state.forcedImageUrl ? "image_url" : "image_upload",
         });
+        // Before the message: the admin closes this app when it gets the image
+        await saveGenerationSceneIfChecked();
         showToast(
             state.forcedImageUrl
                 ? "Image is ready to use. You can choose it from the gallery when uploading images in the product builder."
@@ -2697,6 +3213,8 @@ async function sendBulkResultsToParent(action) {
     }
 
     setBulkUploadButtonsDisabled(true);
+    // Before the images: the admin closes this app when it has saved them
+    await saveGenerationSceneIfChecked();
     postMessageToParent("bulk-images-start", {
         mode: "bulk",
         action,
@@ -2810,6 +3328,7 @@ elements.bulkUploadS3Button.addEventListener("click", async () => {
             fileCount: successes.length,
             sourceType: "generated_results",
         });
+        saveGenerationSceneIfChecked();
         showToast(
             "Uploaded to gallery. You can choose these images from the gallery when uploading images in the product builder.",
             "success",
@@ -2867,6 +3386,7 @@ elements.saveButton.addEventListener("click", () => {
     }
 
     downloadImage(state.resultImageDataUrl, state.uploadedFileName);
+    saveGenerationSceneIfChecked();
     notifyAction({
         operation: "download",
         status: "success",
@@ -2920,6 +3440,7 @@ async function initializeApp() {
         bootstrapForcedImageSelection();
         setMode(state.mode);
         setStatus("");
+        loadSavedScenes();
     } catch (error) {
         hideAuthLoading();
         showAppGuard("Access blocked", error.message || "You do not have access to this app.");

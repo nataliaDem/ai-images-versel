@@ -122,20 +122,20 @@
 
                     <div id="bulkControls" class="mode-panel">
                         <div id="bakerySection" class="field-group is-hidden">
-                            <label for="bakerySelect">Bakery</label>
+                            <label for="bakerySelect">Seller</label>
                             <div id="bakeryCombobox" class="search-select">
                                 <input
                                     id="bakerySearchInput"
                                     class="search-select-input"
                                     type="text"
-                                    placeholder="Choose a bakery"
+                                    placeholder="Choose a seller"
                                     autocomplete="off"
                                 />
                                 <button
                                     id="bakeryComboboxButton"
                                     class="search-select-toggle"
                                     type="button"
-                                    aria-label="Toggle bakery list"
+                                    aria-label="Toggle seller list"
                                 ></button>
                                 <div
                                     id="bakeryDropdown"
@@ -143,7 +143,7 @@
                                 ></div>
                             </div>
                             <select id="bakerySelect" class="visually-hidden" disabled>
-                                <option value="">Loading bakeries...</option>
+                                <option value="">Loading sellers...</option>
                             </select>
                         </div>
 
@@ -179,7 +179,7 @@
                                 id="bulkSourcesGrid"
                                 class="bulk-results-grid empty-state"
                             >
-                                Choose a bakery and category to load products.
+                                Choose a seller and category to load products.
                             </div>
                         </div>
                     </div>
@@ -202,6 +202,11 @@
                         </div>
 
                         <div id="scenePresetGrid" class="scene-preset-grid"></div>
+
+                        <div id="savedScenesSection" class="saved-scenes is-hidden">
+                            <div class="section-title">Custom</div>
+                            <div id="savedScenesList" class="saved-scenes-list"></div>
+                        </div>
 
                         <div
                             id="sceneCustomizePanel"
@@ -234,6 +239,22 @@
                                 <select id="standSelect">
                                 </select>
                             </div>
+                            </div>
+                            <div id="sceneSaveRow" class="scene-save-row is-hidden">
+                                <input
+                                    id="sceneNameInput"
+                                    type="text"
+                                    maxlength="60"
+                                    placeholder="Scene name (optional)"
+                                    aria-label="Scene name"
+                                />
+                                <button
+                                    id="saveSceneButton"
+                                    class="prompt-toggle-button"
+                                    type="button"
+                                >
+                                    Save scene
+                                </button>
                             </div>
                         </div>
                     </section>
@@ -381,6 +402,14 @@
                                         </span>
                                     </button>
                                 </div>
+                                <label
+                                    id="singleSceneAutoSave"
+                                    class="toggle-row is-compact is-hidden"
+                                    for="singleSceneAutoSaveCheckbox"
+                                >
+                                    <span>Save this scene</span>
+                                    <input id="singleSceneAutoSaveCheckbox" type="checkbox" checked />
+                                </label>
                                 <p id="singleUploadNote" class="bulk-download-note">
                                     Be sure to save the generated image so you do not lose it.
                                 </p>
@@ -453,6 +482,14 @@
                                         Add as main images and keep the old images
                                     </button>
                                 </div>
+                                <label
+                                    id="bulkSceneAutoSave"
+                                    class="toggle-row is-compact is-hidden"
+                                    for="bulkSceneAutoSaveCheckbox"
+                                >
+                                    <span>Save this scene</span>
+                                    <input id="bulkSceneAutoSaveCheckbox" type="checkbox" checked />
+                                </label>
                                 <p id="bulkUploadNote" class="bulk-download-note">
                                     After uploading, you will be able to find these images in the library when uploading images in the product builder.
                                 </p>
@@ -485,6 +522,23 @@
                     <div class="lightbox-pane-frame">
                         <img id="lightboxImage" alt="Large generated image preview" />
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="confirmDialog" class="confirm-dialog is-hidden">
+            <div
+                class="confirm-dialog-box"
+                role="alertdialog"
+                aria-modal="true"
+                aria-labelledby="confirmDialogText"
+            >
+                <p id="confirmDialogText" class="confirm-dialog-text"></p>
+                <div class="confirm-dialog-actions">
+                    <button id="confirmDialogCancel" class="outline-button" type="button">
+                        Cancel
+                    </button>
+                    <button id="confirmDialogConfirm" class="secondary-button" type="button"></button>
                 </div>
             </div>
         </div>

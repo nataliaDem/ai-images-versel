@@ -21,6 +21,14 @@ Query param:
 
 - `env=production` or `env=stage`
 
+## Saved scenes
+
+Admins can save a custom scene (wall, table, stand, prompt and a small preview) to the library of
+their bakery, shared by all admins of that bakery. There is no database: each scene is one JSON file
+in the same S3 bucket, `ai-scenes/<env>/<bakeryId>/<sceneId>.json` (outside `ai-images/`, so it does
+not show up in the AI library). `/api/scenes` checks with the Bakery API that the user has access to
+the bakery before listing, saving or deleting.
+
 ## Local Vercel dev
 
 Requirements:
@@ -62,14 +70,23 @@ Local runs use the real OpenAI key, S3 bucket and Slack webhook from `.env`.
 | any other | Preview            | generated per deployment                     | -                   |
 
 The project is connected to GitHub: every push deploys automatically, `master` to production,
-other branches to preview. The stage domain is assigned to the `release` branch in
-Vercel (Settings → Domains), so it always shows the latest `release` deployment.
+other branches to preview. Each `release` deployment is also available at
+https://foodspace-ai-images-git-release-nataliadems-projects.vercel.app.
+
+The stage URL should be assigned to the `release` branch in Vercel (Settings → Domains), then it always
+shows the latest `release` deployment. Until then, move it after each merge into `release`:
+
+```bash
+vercel ls foodspace-ai-images   # take the newest Preview deployment of `release`
+vercel alias set <deployment-url> foodspace-ai-images-stage.vercel.app
+```
 
 Process (same as the bakery admin):
 
 1. Create the task branch from `master`, never from `release`, so that `master` only gets tested work.
-2. Open a PR into `release`. After merge the stage URL is updated, test there with the stage bakery admin.
-3. After testing, open a PR from `release` into `master`. After merge the production URL is updated.
+2. Open a PR from the task branch into `release`. After merge the stage URL is updated, test there with the stage bakery admin.
+3. After testing, open a separate PR from the same task branch into `master` (never `release` → `master`,
+   it would bring other untested work to production). After merge the production URL is updated.
 
 If a change needs a new bakery admin version (for example a new `postMessage` field), release the
 bakery admin to prod first, then merge into `master` here.

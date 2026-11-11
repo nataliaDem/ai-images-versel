@@ -21,6 +21,14 @@ Query param:
 
 - `env=production` or `env=stage`
 
+## Saved scenes
+
+Admins can save a custom scene (wall, table, stand, prompt and a small preview) to the library of
+their bakery, shared by all admins of that bakery. There is no database: each scene is one JSON file
+in the same S3 bucket, `ai-scenes/<env>/<bakeryId>/<sceneId>.json` (outside `ai-images/`, so it does
+not show up in the AI library). `/api/scenes` checks with the Bakery API that the user has access to
+the bakery before listing, saving or deleting.
+
 ## Local Vercel dev
 
 Requirements:
